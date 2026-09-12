@@ -1,7 +1,10 @@
-import { HallDesigner } from "./features/hall/HallDesigner";
 import {
   Component,
+  lazy,
+  Suspense,
   useEffect,
+  useId,
+  useRef,
   useState,
   type ErrorInfo,
   type FormEvent,
@@ -29,14 +32,6 @@ import {
   Utensils,
   X,
 } from "lucide-react";
-import {
-  Bar,
-  BarChart,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from "recharts";
 import { clearAll, loadAll, replaceAll, repository } from "./database/db";
 import type {
   AppData,
@@ -45,7 +40,6 @@ import type {
   SeatingTable,
   StoreName,
   Task,
-  TimelineItem,
   Vendor,
   Wedding,
 } from "./types/models";
@@ -56,6 +50,7 @@ import {
 } from "./features/seating/algorithm";
 import {
   budgetStats,
+  addCalendarDays,
   cents,
   createBackup,
   daysUntil,
@@ -63,6 +58,8 @@ import {
   download,
   emptyData,
   guestStats,
+  localDate,
+  localDateTimeMinute,
   money,
   now,
   parseBackup,
@@ -74,6 +71,12 @@ import {
   validateEmail,
   vendorBalance,
 } from "./utils/domain";
+
+const HallDesigner = lazy(() =>
+  import("./features/hall/HallDesigner").then((module) => ({
+    default: module.HallDesigner,
+  })),
+);
 
 type Section =
   | "dashboard"
@@ -169,17 +172,53 @@ function App() {
   const [data, setData] = useState<AppData>(emptyData);
   const [ready, setReady] = useState(false);
   const [error, setError] = useState("");
+  const [loadFailed, setLoadFailed] = useState(false);
   const [toast, setToast] = useState("");
   const [section, setSection] = useState<Section>("dashboard");
   const [menu, setMenu] = useState(false);
+  const [compactNavigation, setCompactNavigation] = useState(
+    () => matchMedia("(max-width: 900px)").matches,
+  );
+  const menuButtonRef = useRef<HTMLButtonElement>(null);
+  const menuWasOpen = useRef(false);
+  const [online, setOnline] = useState(navigator.onLine);
+  const [updateAvailable, setUpdateAvailable] = useState(false);
   const [dark, setDark] = useState(
     () => localStorage.getItem("theme") === "dark",
   );
   useEffect(() => {
     loadAll()
       .then(setData)
-      .catch((e: Error) => setError(e.message))
+      .catch((e: Error) => {
+        setError(e.message);
+        setLoadFailed(true);
+      })
       .finally(() => setReady(true));
+  }, []);
+  useEffect(() => {
+    const media = matchMedia("(max-width: 900px)");
+    const update = () => setCompactNavigation(media.matches);
+    media.addEventListener("change", update);
+    return () => media.removeEventListener("change", update);
+  }, []);
+  useEffect(() => {
+    if (menu) {
+      document.querySelector<HTMLElement>("#sidebar button")?.focus();
+      menuWasOpen.current = true;
+    } else if (menuWasOpen.current) {
+      menuButtonRef.current?.focus();
+      menuWasOpen.current = false;
+    }
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && menu) setMenu(false);
+    };
+    document.addEventListener("keydown", closeOnEscape);
+    return () => document.removeEventListener("keydown", closeOnEscape);
+  }, [menu]);
+  useEffect(() => {
+    const showUpdate = () => setUpdateAvailable(true);
+    window.addEventListener("vow-update-available", showUpdate);
+    return () => window.removeEventListener("vow-update-available", showUpdate);
   }, []);
   useEffect(() => {
     document.documentElement.dataset.theme = dark ? "dark" : "light";
@@ -190,49 +229,121 @@ function App() {
     const timer = setTimeout(() => setToast(""), 2800);
     return () => clearTimeout(timer);
   }, [toast]);
+  useEffect(() => {
+    const update = () => setOnline(navigator.onLine);
+    window.addEventListener("online", update);
+    window.addEventListener("offline", update);
+    return () => {
+      window.removeEventListener("online", update);
+      window.removeEventListener("offline", update);
+    };
+  }, []);
 
   const save = async <T extends { id: string }>(store: StoreName, item: T) => {
     try {
-      await repository.put(store, item);
-      setData((old) =>
-        store === "wedding"
-          ? { ...old, wedding: item as unknown as Wedding }
-          : {
-              ...old,
-              [store]: [
-                ...(old[store] as unknown as T[]).filter(
-                  (entry) => entry.id !== item.id,
-                ),
-                item,
-              ],
-            },
-      );
+      if (
+        store === "guests" &&
+        (item as unknown as Guest).rsvp === "declined"
+      ) {
+        const next = {
+          ...data,
+          guests: [
+            ...data.guests.filter((guest) => guest.id !== item.id),
+            item as unknown as Guest,
+          ],
+          assignments: data.assignments.filter(
+            (assignment) => assignment.guestId !== item.id,
+          ),
+        };
+        await replaceAll(next);
+        setData(next);
+      } else if (store === "tables") {
+        const table = item as unknown as SeatingTable;
+        const previous = data.tables.find((entry) => entry.id === table.id);
+        const next = {
+          ...data,
+          tables: [
+            ...data.tables.filter((entry) => entry.id !== table.id),
+            table,
+          ],
+          assignments:
+            previous && previous.locked !== table.locked
+              ? data.assignments.map((assignment) =>
+                  assignment.tableId === table.id
+                    ? { ...assignment, locked: table.locked }
+                    : assignment,
+                )
+              : data.assignments,
+        };
+        await replaceAll(next);
+        setData(next);
+      } else {
+        await repository.put(store, item);
+        setData((old) =>
+          store === "wedding"
+            ? { ...old, wedding: item as unknown as Wedding }
+            : {
+                ...old,
+                [store]: [
+                  ...(old[store] as unknown as T[]).filter(
+                    (entry) => entry.id !== item.id,
+                  ),
+                  item,
+                ],
+              },
+        );
+      }
       setToast("Saved on this device");
+      return true;
     } catch (e) {
       setError(e instanceof Error ? e.message : "Save failed.");
+      return false;
     }
   };
   const remove = async (store: Exclude<StoreName, "wedding">, id: string) => {
     if (!confirm("Delete this item? This cannot be undone.")) return;
-    await repository.delete(store, id);
-    setData((old) => ({
-      ...old,
-      [store]: old[store].filter((item) => item.id !== id),
-    }));
-    setToast("Item deleted");
+    try {
+      const next: AppData = {
+        ...data,
+        [store]: data[store].filter((item) => item.id !== id),
+      };
+      if (store === "guests") {
+        next.households = next.households.map((household) => ({
+          ...household,
+          guestIds: household.guestIds.filter((guestId) => guestId !== id),
+        }));
+        next.assignments = next.assignments.filter(
+          (assignment) => assignment.guestId !== id,
+        );
+      } else if (store === "vendors") {
+        next.expenses = next.expenses.map((expense) =>
+          expense.vendorId === id
+            ? { ...expense, vendorId: undefined }
+            : expense,
+        );
+      } else if (store === "expenses") {
+        next.vendors = next.vendors.map((vendor) =>
+          vendor.expenseId === id
+            ? { ...vendor, expenseId: undefined }
+            : vendor,
+        );
+      }
+      await replaceAll(next);
+      setData(next);
+      setToast("Item deleted");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Delete failed.");
+    }
   };
   const loadSample = async (wedding: Wedding) => {
-    const base = new Date(`${wedding.date}T12:00:00`);
     const tasks: Task[] = defaults.map(([title, category, offset]) => {
-      const date = new Date(base);
-      date.setDate(date.getDate() + offset);
       const stamp = now();
       return {
         id: uid(),
         title,
         category,
         notes: "",
-        dueDate: date.toISOString().slice(0, 10),
+        dueDate: addCalendarDays(wedding.date, offset),
         priority: offset > -30 ? "high" : "medium",
         status: "pending",
         createdAt: stamp,
@@ -255,6 +366,7 @@ function App() {
     await replaceAll(sample);
     setData(sample);
     setToast("Sample checklist added");
+    return true;
   };
 
   if (!ready)
@@ -264,12 +376,40 @@ function App() {
         <p>Opening your private planner…</p>
       </div>
     );
+  if (loadFailed)
+    return (
+      <main className="fatal" role="alert">
+        <Heart />
+        <h1>Your saved planner could not be opened</h1>
+        <p>{error}</p>
+        <p>No saved records were overwritten.</p>
+        <button onClick={() => location.reload()}>Try again</button>
+      </main>
+    );
   if (!data.wedding)
     return (
       <Setup
         onSave={async (wedding, sample) =>
           sample ? loadSample(wedding) : save("wedding", wedding)
         }
+        onRestore={async (file) => {
+          if (file.size > 5_000_000) {
+            setError("Backup is larger than the 5 MB limit.");
+            return;
+          }
+          try {
+            const restored = parseBackup(await file.text()).data;
+            await replaceAll(restored);
+            setData(restored);
+            setError("");
+          } catch (restoreError) {
+            setError(
+              restoreError instanceof Error
+                ? restoreError.message
+                : "Invalid backup.",
+            );
+          }
+        }}
         error={error}
       />
     );
@@ -278,10 +418,16 @@ function App() {
     checklist: <Checklist data={data} save={save} remove={remove} />,
     budget: <Budget data={data} save={save} remove={remove} />,
     guests: <Guests data={data} save={save} remove={remove} />,
-    hall: <HallDesigner data={data} setData={setData} />,
+    hall: (
+      <Suspense fallback={<p className="loading">Loading Hall Designer…</p>}>
+        <HallDesigner data={data} setData={setData} />
+      </Suspense>
+    ),
     seating: <Seating data={data} setData={setData} save={save} />,
     vendors: <Vendors data={data} save={save} remove={remove} />,
-    timeline: <Timeline data={data} save={save} remove={remove} />,
+    timeline: (
+      <Timeline data={data} setData={setData} save={save} remove={remove} />
+    ),
     notes: <Notes data={data} save={save} remove={remove} />,
     settings: (
       <SettingsPage
@@ -297,7 +443,14 @@ function App() {
   return (
     <ErrorBoundary>
       <div className="app-shell">
-        <aside className={menu ? "sidebar open" : "sidebar"}>
+        <a className="skip-link" href="#main-content">
+          Skip to main content
+        </a>
+        <aside
+          id="sidebar"
+          className={menu ? "sidebar open" : "sidebar"}
+          inert={compactNavigation && !menu ? true : undefined}
+        >
           <div className="brand">
             <span>
               <Heart fill="currentColor" />
@@ -340,12 +493,15 @@ function App() {
             Stored only on this device
           </div>
         </aside>
-        <main className="main">
+        <main className="main" id="main-content" tabIndex={-1}>
           <header>
             <button
+              ref={menuButtonRef}
               className="icon mobile-only"
               onClick={() => setMenu(true)}
               aria-label="Open menu"
+              aria-controls="sidebar"
+              aria-expanded={menu}
             >
               <Menu />
             </button>
@@ -355,7 +511,7 @@ function App() {
             </div>
             <div className="header-actions">
               <span className="offline" aria-live="polite">
-                {navigator.onLine ? "Online" : "Offline ready"}
+                {online ? "Online" : "Offline ready"}
               </span>
               <button
                 className="icon"
@@ -374,6 +530,14 @@ function App() {
               </button>
             </div>
           )}
+          {updateAvailable && (
+            <div className="update-banner" role="status">
+              <span>A new version of Vow is ready.</span>
+              <button onClick={() => location.reload()}>
+                Reload to update
+              </button>
+            </div>
+          )}
           {page}
         </main>
         {toast && (
@@ -388,33 +552,61 @@ function App() {
 
 function Setup({
   onSave,
+  onRestore,
   error,
 }: {
-  onSave: (w: Wedding, sample: boolean) => Promise<void>;
+  onSave: (w: Wedding, sample: boolean) => Promise<boolean | void>;
+  onRestore: (file: File) => Promise<void>;
   error: string;
 }) {
   const [sample, setSample] = useState(false);
-  const submit = (event: FormEvent<HTMLFormElement>) => {
+  const [submitError, setSubmitError] = useState("");
+  const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
     const date = String(form.get("date"));
-    if (date < new Date().toISOString().slice(0, 10))
-      return alert("Wedding date cannot be in the past.");
-    onSave(
-      {
-        id: "profile",
-        partnerOne: String(form.get("partnerOne")).trim(),
-        partnerTwo: String(form.get("partnerTwo")).trim(),
-        date,
-        time: String(form.get("time")),
-        venue: String(form.get("venue")).trim(),
-        expectedGuests: Number(form.get("guests")),
-        budgetCents: cents(form.get("budget")),
-        currency: String(form.get("currency")),
-        color: String(form.get("color")),
-      },
-      sample,
-    );
+    if (date < localDate()) {
+      setSubmitError("Wedding date cannot be in the past.");
+      return;
+    }
+    const expectedGuests = Number(form.get("guests"));
+    const budgetCents = cents(form.get("budget"));
+    if (
+      !Number.isSafeInteger(expectedGuests) ||
+      expectedGuests < 0 ||
+      expectedGuests > 100_000 ||
+      !Number.isSafeInteger(budgetCents) ||
+      budgetCents < 0
+    ) {
+      setSubmitError(
+        "Enter valid guest and budget amounts within sensible limits.",
+      );
+      return;
+    }
+    try {
+      const saved = await onSave(
+        {
+          id: "profile",
+          partnerOne: String(form.get("partnerOne")).trim(),
+          partnerTwo: String(form.get("partnerTwo")).trim(),
+          date,
+          time: String(form.get("time")),
+          venue: String(form.get("venue")).trim(),
+          expectedGuests,
+          budgetCents,
+          currency: String(form.get("currency")),
+          color: String(form.get("color")),
+        },
+        sample,
+      );
+      if (saved === false) setSubmitError("The wedding could not be saved.");
+    } catch (error) {
+      setSubmitError(
+        error instanceof Error
+          ? error.message
+          : "The wedding could not be saved.",
+      );
+    }
   };
   return (
     <main className="setup">
@@ -443,7 +635,11 @@ function Setup({
       <section className="setup-form">
         <p className="step">First, tell us about your day</p>
         <h2>Create your wedding</h2>
-        {error && <div className="alert">{error}</div>}
+        {(error || submitError) && (
+          <div className="alert" role="alert">
+            {error || submitError}
+          </div>
+        )}
         <form onSubmit={submit}>
           <div className="form-grid">
             <Field label="Partner one's name" name="partnerOne" required />
@@ -488,6 +684,18 @@ function Setup({
           <button className="primary" type="submit">
             Start planning <Heart size={18} />
           </button>
+          <label className="button restore-button">
+            <ArchiveRestore /> Restore a backup instead
+            <input
+              type="file"
+              accept="application/json,.json"
+              hidden
+              onChange={(event) => {
+                const file = event.target.files?.[0];
+                if (file) onRestore(file);
+              }}
+            />
+          </label>
           <small>
             Your information stays in this browser. Export regular backups in
             Settings.
@@ -598,6 +806,18 @@ function Modal({
   close: () => void;
   children: ReactNode;
 }) {
+  const titleId = useId();
+  const dialogRef = useRef<HTMLElement>(null);
+  useEffect(() => {
+    const previous = document.activeElement as HTMLElement | null;
+    const dialog = dialogRef.current;
+    dialog
+      ?.querySelector<HTMLElement>(
+        "button, input, select, textarea, [href], [tabindex]:not([tabindex='-1'])",
+      )
+      ?.focus();
+    return () => previous?.focus();
+  }, []);
   return (
     <div
       className="modal-backdrop"
@@ -607,13 +827,36 @@ function Modal({
       }}
     >
       <section
+        ref={dialogRef}
         className="modal"
         role="dialog"
         aria-modal="true"
-        aria-labelledby="modal-title"
+        aria-labelledby={titleId}
+        onKeyDown={(event) => {
+          if (event.key === "Escape") {
+            event.preventDefault();
+            close();
+            return;
+          }
+          if (event.key !== "Tab") return;
+          const controls = [
+            ...dialogRef.current!.querySelectorAll<HTMLElement>(
+              "button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [href], [tabindex]:not([tabindex='-1'])",
+            ),
+          ];
+          const first = controls[0];
+          const last = controls.at(-1);
+          if (event.shiftKey && document.activeElement === first) {
+            event.preventDefault();
+            last?.focus();
+          } else if (!event.shiftKey && document.activeElement === last) {
+            event.preventDefault();
+            first?.focus();
+          }
+        }}
       >
         <header>
-          <h2 id="modal-title">{title}</h2>
+          <h2 id={titleId}>{title}</h2>
           <button className="icon" onClick={close} aria-label="Close">
             <X />
           </button>
@@ -664,10 +907,7 @@ function Dashboard({ data }: { data: AppData }) {
     .sort((a, b) => a.dueDate.localeCompare(b.dueDate))
     .slice(0, 4);
   const nextActivity = [...data.timeline]
-    .filter(
-      (x) =>
-        `${x.date}T${x.startTime}` >= new Date().toISOString().slice(0, 16),
-    )
+    .filter((x) => `${x.date}T${x.startTime}` >= localDateTimeMinute())
     .sort((a, b) =>
       `${a.date}${a.startTime}`.localeCompare(`${b.date}${b.startTime}`),
     )[0];
@@ -728,21 +968,25 @@ function Dashboard({ data }: { data: AppData }) {
         <section className="panel">
           <h3>Budget at a glance</h3>
           {data.expenses.length ? (
-            <div className="chart">
-              <ResponsiveContainer width="100%" height={220}>
-                <BarChart data={chart}>
-                  <XAxis dataKey="name" />
-                  <YAxis hide />
-                  <Tooltip
-                    formatter={(v) => money(Number(v) * 100, wedding.currency)}
-                  />
-                  <Bar
-                    dataKey="value"
-                    fill={wedding.color}
-                    radius={[8, 8, 0, 0]}
-                  />
-                </BarChart>
-              </ResponsiveContainer>
+            <div className="chart" aria-label="Budget comparison chart">
+              {chart.map((item) => {
+                const maximum = Math.max(
+                  1,
+                  ...chart.map((entry) => entry.value),
+                );
+                return (
+                  <div className="chart-column" key={item.name}>
+                    <span>{money(item.value * 100, wedding.currency)}</span>
+                    <i
+                      style={{
+                        height: `${Math.max(2, (item.value / maximum) * 160)}px`,
+                        background: wedding.color,
+                      }}
+                    />
+                    <strong>{item.name}</strong>
+                  </div>
+                );
+              })}
             </div>
           ) : (
             <Empty
@@ -795,6 +1039,11 @@ function Dashboard({ data }: { data: AppData }) {
               ? `${guests.confirmed - seatingAssigned} confirmed attendees need seats`
               : "Confirmed guests are seated"}
           </h3>
+          <p>
+            {data.halls.length
+              ? `${data.halls.length} hall ${data.halls.length === 1 ? "space" : "spaces"} · ${data.halls.reduce((sum, hall) => sum + hall.elements.filter((element) => element.tableId).length, 0)} tables placed`
+              : "No hall layout created yet"}
+          </p>
         </div>
         <div>
           <strong>{seatingCapacity}</strong>
@@ -829,7 +1078,7 @@ function Dashboard({ data }: { data: AppData }) {
 type Save = <T extends { id: string }>(
   store: StoreName,
   item: T,
-) => Promise<void>;
+) => Promise<boolean>;
 type Remove = (
   store: Exclude<StoreName, "wedding">,
   id: string,
@@ -855,11 +1104,11 @@ function Checklist({
         (status === "all" || x.status === status),
     )
     .sort((a, b) => a.dueDate.localeCompare(b.dueDate));
-  const submit = (e: FormEvent<HTMLFormElement>) => {
+  const submit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const f = new FormData(e.currentTarget),
       stamp = now();
-    save("tasks", {
+    const saved = await save("tasks", {
       id: uid(),
       title: String(f.get("title")).trim(),
       category: String(f.get("category")),
@@ -870,7 +1119,7 @@ function Checklist({
       createdAt: stamp,
       updatedAt: stamp,
     });
-    setOpen(false);
+    if (saved) setOpen(false);
   };
   return (
     <>
@@ -910,8 +1159,7 @@ function Checklist({
         <div className="item-list">
           {tasks.map((task) => {
             const overdue =
-              task.status !== "completed" &&
-              task.dueDate < new Date().toISOString().slice(0, 10);
+              task.status !== "completed" && task.dueDate < localDate();
             return (
               <article
                 className={task.status === "completed" ? "item done" : "item"}
@@ -1011,18 +1259,21 @@ function Budget({
   const [open, setOpen] = useState(false),
     stats = budgetStats(data.expenses, data.wedding!.budgetCents),
     currency = data.wedding!.currency;
-  const submit = (e: FormEvent<HTMLFormElement>) => {
+  const submit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const f = new FormData(e.currentTarget),
+      estimated = cents(f.get("estimated")),
       actual = cents(f.get("actual")),
       paid = cents(f.get("paid"));
+    if (![estimated, actual, paid].every(Number.isSafeInteger))
+      return alert("Enter valid monetary amounts within supported limits.");
     if (paid > actual) return alert("Amount paid cannot exceed actual cost.");
     const stamp = now();
-    save("expenses", {
+    const saved = await save("expenses", {
       id: uid(),
       description: String(f.get("description")).trim(),
       category: String(f.get("category")),
-      estimatedCents: cents(f.get("estimated")),
+      estimatedCents: estimated,
       actualCents: actual,
       paidCents: paid,
       deadline: String(f.get("deadline")),
@@ -1030,7 +1281,7 @@ function Budget({
       createdAt: stamp,
       updatedAt: stamp,
     });
-    setOpen(false);
+    if (saved) setOpen(false);
   };
   return (
     <>
@@ -1155,19 +1406,22 @@ function Guests({
       v.toLowerCase().includes(query.toLowerCase()),
     ),
   );
-  const submit = (e: FormEvent<HTMLFormElement>) => {
+  const submit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const f = new FormData(e.currentTarget),
-      email = String(f.get("email"));
+      email = String(f.get("email")),
+      attendees = Number(f.get("attendees"));
     if (!validateEmail(email)) return alert("Enter a valid email address.");
+    if (!Number.isInteger(attendees) || attendees < 1 || attendees > 1_000)
+      return alert("Attendees must be a whole number from 1 to 1,000.");
     const stamp = now();
-    save("guests", {
+    const saved = await save("guests", {
       id: uid(),
       name: String(f.get("name")).trim(),
       group: String(f.get("group")) as Guest["group"],
       phone: String(f.get("phone")),
       email,
-      attendees: Number(f.get("attendees")),
+      attendees,
       invitation: String(f.get("invitation")) as Guest["invitation"],
       rsvp: String(f.get("rsvp")) as Guest["rsvp"],
       meal: String(f.get("meal")),
@@ -1176,7 +1430,7 @@ function Guests({
       createdAt: stamp,
       updatedAt: stamp,
     });
-    setOpen(false);
+    if (saved) setOpen(false);
   };
   return (
     <>
@@ -1358,11 +1612,21 @@ function Seating({
         item.name.toLowerCase().includes(query.toLowerCase()),
     )
     .sort((a, b) => a.displayOrder - b.displayOrder);
-  const addTable = (event: FormEvent<HTMLFormElement>) => {
+  const addTable = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
     const capacityValue = Number(form.get("capacity"));
     const reservedSeats = Number(form.get("reservedSeats"));
+    if (
+      !Number.isInteger(capacityValue) ||
+      capacityValue < 1 ||
+      capacityValue > 1_000 ||
+      !Number.isInteger(reservedSeats) ||
+      reservedSeats < 0
+    )
+      return alert(
+        "Capacity must be 1–1,000 and reserved seats must be a whole number.",
+      );
     if (reservedSeats > capacityValue)
       return alert("Reserved seats cannot exceed table capacity.");
     if (
@@ -1373,7 +1637,7 @@ function Seating({
         "Effective capacity cannot be lower than existing assignments.",
       );
     const stamp = now();
-    save("tables", {
+    const saved = await save("tables", {
       id: editingTable?.id ?? uid(),
       name: String(form.get("name")).trim(),
       group: String(form.get("group")).trim(),
@@ -1386,14 +1650,23 @@ function Seating({
       createdAt: editingTable?.createdAt ?? stamp,
       updatedAt: stamp,
     });
-    setTableOpen(false);
-    setEditingTable(null);
+    if (saved) {
+      setTableOpen(false);
+      setEditingTable(null);
+    }
   };
-  const addHousehold = (event: FormEvent<HTMLFormElement>) => {
+  const addHousehold = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
     const maximumInvited = Number(form.get("maximumInvited"));
     const confirmedAttendees = Number(form.get("confirmedAttendees"));
+    if (
+      !Number.isInteger(maximumInvited) ||
+      maximumInvited < 0 ||
+      maximumInvited > 1_000 ||
+      !Number.isInteger(confirmedAttendees)
+    )
+      return alert("Household counts must be whole numbers from 0 to 1,000.");
     const guestIds = form.getAll("guestIds").map(String);
     const used = new Set(data.households.flatMap((item) => item.guestIds));
     if (guestIds.some((id) => used.has(id)))
@@ -1403,7 +1676,7 @@ function Seating({
         "Confirmed attendees must be between zero and invitation limit.",
       );
     const stamp = now();
-    save("households", {
+    const saved = await save("households", {
       id: uid(),
       name: String(form.get("name")).trim(),
       guestIds,
@@ -1416,7 +1689,21 @@ function Seating({
       createdAt: stamp,
       updatedAt: stamp,
     });
-    setHouseholdOpen(false);
+    if (saved) setHouseholdOpen(false);
+  };
+  const replaceSeatingData = async (next: AppData) => {
+    try {
+      await replaceAll(next);
+      setData(next);
+      return true;
+    } catch (error) {
+      alert(
+        error instanceof Error
+          ? error.message
+          : "Seating changes could not be saved.",
+      );
+      return false;
+    }
   };
   const generate = async () => {
     const result = generateSeating(
@@ -1427,9 +1714,7 @@ function Seating({
       includePending,
     );
     const next = { ...data, assignments: result.assignments };
-    await replaceAll(next);
-    setData(next);
-    setConflicts(result.conflicts);
+    if (await replaceSeatingData(next)) setConflicts(result.conflicts);
   };
   const resetAutomatic = async () => {
     const next = {
@@ -1438,9 +1723,7 @@ function Seating({
         (item) => item.assignmentType !== "automatic",
       ),
     };
-    await replaceAll(next);
-    setData(next);
-    setConflicts([]);
+    if (await replaceSeatingData(next)) setConflicts([]);
   };
   const deleteTable = async (table: SeatingTable) => {
     if (!confirm(`Delete ${table.name} and remove its seating assignments?`))
@@ -1450,7 +1733,13 @@ function Seating({
       halls: data.halls.map((h) => ({
         ...h,
         elements: h.elements.filter((e) => e.tableId !== table.id),
-        snapshots: h.snapshots.map(s=>({...s,layout:{...s.layout,elements:s.layout.elements.filter(e=>e.tableId!==table.id)}})),
+        snapshots: h.snapshots.map((s) => ({
+          ...s,
+          layout: {
+            ...s.layout,
+            elements: s.layout.elements.filter((e) => e.tableId !== table.id),
+          },
+        })),
       })),
       tables: data.tables.filter((item) => item.id !== table.id),
       assignments: data.assignments.filter((item) => item.tableId !== table.id),
@@ -1460,8 +1749,7 @@ function Seating({
           : item,
       ),
     };
-    await replaceAll(next);
-    setData(next);
+    await replaceSeatingData(next);
   };
   const deleteHousehold = async (household: Household) => {
     if (!confirm(`Delete ${household.name} and remove its seating assignment?`))
@@ -1473,18 +1761,19 @@ function Seating({
         (item) => item.householdId !== household.id,
       ),
     };
-    await replaceAll(next);
-    setData(next);
+    await replaceSeatingData(next);
   };
   const lockHousehold = async (household: Household, tableId: string) => {
     const assignments = data.assignments.filter(
       (item) => item.householdId !== household.id,
     );
     const nextHousehold = { ...household, lockedTableId: tableId || undefined };
-    if (tableId) {
+    if (tableId && household.confirmedAttendees > 0) {
       const available =
         effectiveCapacity(data.tables.find((item) => item.id === tableId)!) -
-        assignments.filter(a=>a.tableId===tableId).reduce((sum,a)=>sum+a.seatCount,0);
+        assignments
+          .filter((a) => a.tableId === tableId)
+          .reduce((sum, a) => sum + a.seatCount, 0);
       if (household.confirmedAttendees > available)
         return alert(
           "Household does not fit. Resolve capacity before locking.",
@@ -1507,8 +1796,7 @@ function Seating({
       ),
       assignments,
     };
-    await replaceAll(next);
-    setData(next);
+    await replaceSeatingData(next);
   };
   const exportByTable = () =>
     download(
@@ -1939,16 +2227,23 @@ function Vendors({
       v.name.toLowerCase().includes(query.toLowerCase()),
     ),
     currency = data.wedding!.currency;
-  const submit = (e: FormEvent<HTMLFormElement>) => {
+  const submit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const f = new FormData(e.currentTarget),
       email = String(f.get("email")),
-      website = String(f.get("website"));
+      website = String(f.get("website")),
+      estimatedCents = cents(f.get("estimated")),
+      finalCents = cents(f.get("final")),
+      depositCents = cents(f.get("deposit"));
     if (!validateEmail(email)) return alert("Enter a valid email address.");
     if (website && !safeWebsite(website))
       return alert("Website must use http or https.");
+    if (![estimatedCents, finalCents, depositCents].every(Number.isSafeInteger))
+      return alert("Enter valid monetary amounts within supported limits.");
+    if (depositCents > finalCents)
+      return alert("Deposit paid cannot exceed the final cost.");
     const stamp = now();
-    save("vendors", {
+    const saved = await save("vendors", {
       id: uid(),
       name: String(f.get("name")).trim(),
       category: String(f.get("category")),
@@ -1956,16 +2251,16 @@ function Vendors({
       phone: String(f.get("phone")),
       email,
       website,
-      estimatedCents: cents(f.get("estimated")),
-      finalCents: cents(f.get("final")),
-      depositCents: cents(f.get("deposit")),
+      estimatedCents,
+      finalCents,
+      depositCents,
       deadline: String(f.get("deadline")),
       status: String(f.get("status")) as Vendor["status"],
       notes: String(f.get("notes")),
       createdAt: stamp,
       updatedAt: stamp,
     });
-    setOpen(false);
+    if (saved) setOpen(false);
   };
   return (
     <>
@@ -1992,9 +2287,7 @@ function Vendors({
         <div className="card-grid">
           {vendors.map((v) => {
             const overdue =
-              v.deadline &&
-              v.deadline < new Date().toISOString().slice(0, 10) &&
-              vendorBalance(v) > 0;
+              v.deadline && v.deadline < localDate() && vendorBalance(v) > 0;
             return (
               <article className="vendor-card" key={v.id}>
                 <div>
@@ -2080,10 +2373,12 @@ function Vendors({
 
 function Timeline({
   data,
+  setData,
   save,
   remove,
 }: {
   data: AppData;
+  setData: React.Dispatch<React.SetStateAction<AppData>>;
   save: Save;
   remove: Remove;
 }) {
@@ -2093,14 +2388,14 @@ function Timeline({
       `${b.date}${b.startTime}${b.order}`,
     ),
   );
-  const submit = (e: FormEvent<HTMLFormElement>) => {
+  const submit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const f = new FormData(e.currentTarget),
       start = String(f.get("startTime")),
       end = String(f.get("endTime"));
     if (end && end <= start) return alert("End time must be after start time.");
     const stamp = now();
-    save("timeline", {
+    const saved = await save("timeline", {
       id: uid(),
       title: String(f.get("title")).trim(),
       date: String(f.get("date")),
@@ -2113,14 +2408,29 @@ function Timeline({
       createdAt: stamp,
       updatedAt: stamp,
     });
-    setOpen(false);
+    if (saved) setOpen(false);
   };
-  const move = (item: TimelineItem, direction: number) =>
-    save("timeline", {
+  const move = async (index: number, direction: -1 | 1) => {
+    const target = index + direction;
+    if (target < 0 || target >= items.length) return;
+    const reordered = [...items];
+    [reordered[index], reordered[target]] = [
+      reordered[target],
+      reordered[index],
+    ];
+    const timeline = reordered.map((item, order) => ({
       ...item,
-      order: item.order + direction,
+      order,
       updatedAt: now(),
-    });
+    }));
+    const next = { ...data, timeline };
+    try {
+      await replaceAll(next);
+      setData(next);
+    } catch {
+      alert("Timeline order could not be saved.");
+    }
+  };
   return (
     <>
       <PageTitle
@@ -2151,18 +2461,24 @@ function Timeline({
                 {x.notes && <small>{x.notes}</small>}
               </div>
               <div className="reorder no-print">
-                <button disabled={index === 0} onClick={() => move(x, -2)}>
+                <button
+                  aria-label={`Move ${x.title} earlier`}
+                  disabled={index === 0}
+                  onClick={() => move(index, -1)}
+                >
                   ↑
                 </button>
                 <button
                   disabled={index === items.length - 1}
-                  onClick={() => move(x, 2)}
+                  aria-label={`Move ${x.title} later`}
+                  onClick={() => move(index, 1)}
                 >
                   ↓
                 </button>
                 <button
                   className="icon danger-button"
                   onClick={() => remove("timeline", x.id)}
+                  aria-label={`Delete ${x.title}`}
                 >
                   <Trash2 />
                 </button>
@@ -2221,11 +2537,11 @@ function Notes({
       `${n.title} ${n.content}`.toLowerCase().includes(query.toLowerCase()),
     )
     .sort((a, b) => Number(b.pinned) - Number(a.pinned));
-  const submit = (e: FormEvent<HTMLFormElement>) => {
+  const submit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const f = new FormData(e.currentTarget),
       stamp = now();
-    save("notes", {
+    const saved = await save("notes", {
       id: uid(),
       title: String(f.get("title")).trim(),
       content: String(f.get("content")).trim(),
@@ -2234,7 +2550,7 @@ function Notes({
       createdAt: stamp,
       updatedAt: stamp,
     });
-    setOpen(false);
+    if (saved) setOpen(false);
   };
   return (
     <>
@@ -2282,6 +2598,7 @@ function Notes({
                   <button
                     className="icon danger-button"
                     onClick={() => remove("notes", n.id)}
+                    aria-label={`Delete ${n.title}`}
                   >
                     <Trash2 />
                   </button>
@@ -2346,18 +2663,30 @@ function SettingsPage({
   const [preview, setPreview] = useState<AppData | null>(null),
     [phrase, setPhrase] = useState("");
   const profile = data.wedding!;
-  const submit = (e: FormEvent<HTMLFormElement>) => {
+  const submit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const f = new FormData(e.currentTarget);
-    save("wedding", {
+    const expectedGuests = Number(f.get("guests"));
+    const budgetCents = cents(f.get("budget"));
+    if (
+      !Number.isSafeInteger(expectedGuests) ||
+      expectedGuests < 0 ||
+      expectedGuests > 100_000 ||
+      !Number.isSafeInteger(budgetCents) ||
+      budgetCents < 0
+    )
+      return alert(
+        "Enter valid guest and budget amounts within sensible limits.",
+      );
+    await save("wedding", {
       ...profile,
       partnerOne: String(f.get("partnerOne")),
       partnerTwo: String(f.get("partnerTwo")),
       date: String(f.get("date")),
       time: String(f.get("time")),
       venue: String(f.get("venue")),
-      expectedGuests: Number(f.get("guests")),
-      budgetCents: cents(f.get("budget")),
+      expectedGuests,
+      budgetCents,
       currency: String(f.get("currency")),
       color: String(f.get("color")),
     });
@@ -2375,16 +2704,32 @@ function SettingsPage({
   const restore = async () => {
     if (!preview || !confirm("Replace all current data with this backup?"))
       return;
-    await replaceAll(preview);
-    setData(preview);
-    setPreview(null);
+    try {
+      await replaceAll(preview);
+      setData(preview);
+      setPreview(null);
+    } catch (restoreError) {
+      alert(
+        restoreError instanceof Error
+          ? restoreError.message
+          : "Restore failed.",
+      );
+    }
   };
   const clear = async () => {
     if (phrase !== "CLEAR MY WEDDING") return;
     if (!confirm("Permanently clear every wedding record on this device?"))
       return;
-    await clearAll();
-    location.reload();
+    try {
+      await clearAll();
+      location.reload();
+    } catch (clearError) {
+      alert(
+        clearError instanceof Error
+          ? clearError.message
+          : "Clear operation failed.",
+      );
+    }
   };
   return (
     <>
@@ -2465,6 +2810,7 @@ function SettingsPage({
             <button
               role="switch"
               aria-checked={dark}
+              aria-label="Dark theme"
               className={dark ? "toggle on" : "toggle"}
               onClick={() => setDark(!dark)}
             >

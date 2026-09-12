@@ -1,8 +1,10 @@
 import type { AppData, StoreName } from "../types/models";
 import { emptyData } from "../utils/domain";
+import { validateAppData } from "../utils/validation";
 
-const DB_NAME = "vow-planner";
-const STORES: StoreName[] = [
+export const DB_NAME = "vow-planner";
+export const DB_VERSION = 3;
+export const STORES: StoreName[] = [
   "wedding",
   "tasks",
   "expenses",
@@ -18,13 +20,20 @@ const STORES: StoreName[] = [
 
 function openDatabase(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
-    const request = indexedDB.open(DB_NAME, 3);
+    const request = indexedDB.open(DB_NAME, DB_VERSION);
     request.onupgradeneeded = () =>
       STORES.forEach((name) => {
         if (!request.result.objectStoreNames.contains(name))
           request.result.createObjectStore(name, { keyPath: "id" });
       });
-    request.onsuccess = () => resolve(request.result);
+    request.onsuccess = () => {
+      request.result.onversionchange = () => request.result.close();
+      resolve(request.result);
+    };
+    request.onblocked = () =>
+      reject(
+        new Error("Close other Vow tabs so local storage can be upgraded."),
+      );
     request.onerror = () =>
       reject(
         new Error(
@@ -42,7 +51,15 @@ async function transaction<T>(
   const db = await openDatabase();
   return new Promise((resolve, reject) => {
     const tx = db.transaction(store, mode);
-    const request = run(tx.objectStore(store));
+    let request: IDBRequest<T>;
+    try {
+      request = run(tx.objectStore(store));
+    } catch (error) {
+      tx.abort();
+      db.close();
+      reject(error);
+      return;
+    }
     request.onsuccess = () => {};
     request.onerror = () =>
       reject(request.error ?? new Error("Local save failed."));
@@ -84,7 +101,7 @@ export async function loadAll(): Promise<AppData> {
     assignments,
     halls,
   ] = await Promise.all(STORES.map((store) => repository.all<never>(store)));
-  return {
+  return validateAppData({
     wedding: wedding[0],
     tasks,
     expenses,
@@ -96,10 +113,11 @@ export async function loadAll(): Promise<AppData> {
     households,
     assignments,
     halls,
-  } as AppData;
+  });
 }
 
 export async function replaceAll(data: AppData) {
+  const validated = validateAppData(data);
   const db = await openDatabase();
   await new Promise<void>((resolve, reject) => {
     const tx = db.transaction(STORES, "readwrite");
@@ -111,11 +129,13 @@ export async function replaceAll(data: AppData) {
           ? data.wedding
             ? [data.wedding]
             : []
-          : data[storeName];
+          : validated[storeName];
       values.forEach((value) => store.put(value));
     }
     tx.oncomplete = () => resolve();
     tx.onerror = () =>
+      reject(tx.error ?? new Error("Restore failed. No data was changed."));
+    tx.onabort = () =>
       reject(tx.error ?? new Error("Restore failed. No data was changed."));
   });
   db.close();

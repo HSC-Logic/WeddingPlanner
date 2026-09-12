@@ -42,6 +42,20 @@ body {
   background: var(--bg);
   color: var(--text);
 }
+.skip-link {
+  position: fixed;
+  left: 12px;
+  top: 12px;
+  z-index: 1000;
+  padding: 12px 16px;
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--text);
+  transform: translateY(-150%);
+}
+.skip-link:focus {
+  transform: translateY(0);
+}
 button,
 input,
 select,
@@ -111,7 +125,7 @@ small {
 .app-shell {
   min-height: 100vh;
   display: grid;
-  grid-template-columns: 250px 1fr;
+  grid-template-columns: 250px minmax(0, 1fr);
 }
 .sidebar {
   background: #493536;
@@ -181,6 +195,7 @@ small {
   grid-column: 2;
   padding: 0 42px 60px;
   width: 100%;
+  min-width: 0;
   max-width: 1500px;
 }
 .main > header {
@@ -355,9 +370,31 @@ small {
   font-size: 19px;
 }
 .chart {
-  margin: 4px -12px -8px;
+  min-height: 220px;
+  display: flex;
+  align-items: end;
+  justify-content: space-around;
+  gap: 16px;
+  padding-top: 28px;
   font-family: ui-sans-serif, sans-serif;
   font-size: 11px;
+}
+.chart-column {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+.chart-column span {
+  overflow-wrap: anywhere;
+  text-align: center;
+  color: var(--muted);
+}
+.chart-column i {
+  width: min(72px, 75%);
+  min-height: 2px;
+  border-radius: 8px 8px 0 0;
 }
 .compact-list {
   display: grid;
@@ -1082,6 +1119,17 @@ legend {
   display: flex;
   justify-content: space-between;
   align-items: center;
+}
+.update-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+  padding: 12px 16px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface);
 }
 .alert button {
   border: 0;

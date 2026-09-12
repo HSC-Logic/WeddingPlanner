@@ -198,6 +198,44 @@ export function HallDesigner({
       window.removeEventListener("hall-navigation", navigate);
     };
   }, []);
+  useEffect(() => {
+    const dialog = document.querySelector<HTMLElement>(
+      ".hall-designer [role='dialog']",
+    );
+    if (!dialog) return;
+    const previous = document.activeElement as HTMLElement | null;
+    const controls = () => [
+      ...dialog.querySelectorAll<HTMLElement>(
+        "button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [href], [tabindex]:not([tabindex='-1'])",
+      ),
+    ];
+    controls()[0]?.focus();
+    const keydown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        if (suggestion) setSuggestion(null);
+        else if (help) setHelp(false);
+        else setWizard(false);
+        return;
+      }
+      if (event.key !== "Tab") return;
+      const items = controls();
+      const first = items[0];
+      const last = items.at(-1);
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last?.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first?.focus();
+      }
+    };
+    dialog.addEventListener("keydown", keydown);
+    return () => {
+      dialog.removeEventListener("keydown", keydown);
+      previous?.focus();
+    };
+  }, [wizard, help, suggestion]);
   async function undo(direction: "undo" | "redo") {
     const result = travel(history, direction);
     if (!result) return;
@@ -1059,12 +1097,14 @@ export function HallDesigner({
                     <label>
                       Name
                       <input
-                        value={table?.name ?? element.name}
-                        onChange={(e) =>
-                          table
-                            ? updateTable({ name: e.target.value })
-                            : update({ name: e.target.value })
-                        }
+                        key={`${element.id}-${table?.name ?? element.name}`}
+                        defaultValue={table?.name ?? element.name}
+                        onBlur={(e) => {
+                          if (e.target.value === (table?.name ?? element.name))
+                            return;
+                          if (table) updateTable({ name: e.target.value });
+                          else update({ name: e.target.value });
+                        }}
                         disabled={isLocked(hall, element)}
                       />
                     </label>
@@ -1110,8 +1150,12 @@ export function HallDesigner({
                       <label>
                         Notes
                         <textarea
-                          value={element.notes}
-                          onChange={(e) => update({ notes: e.target.value })}
+                          key={`${element.id}-${element.notes}`}
+                          defaultValue={element.notes}
+                          onBlur={(e) => {
+                            if (e.target.value !== element.notes)
+                              update({ notes: e.target.value });
+                          }}
                         />
                       </label>
                       {numberField(
@@ -1122,10 +1166,12 @@ export function HallDesigner({
                       <label>
                         Service direction
                         <input
-                          value={element.serviceDirection}
-                          onChange={(e) =>
-                            update({ serviceDirection: e.target.value })
-                          }
+                          key={`${element.id}-${element.serviceDirection}`}
+                          defaultValue={element.serviceDirection}
+                          onBlur={(e) => {
+                            if (e.target.value !== element.serviceDirection)
+                              update({ serviceDirection: e.target.value });
+                          }}
                         />
                       </label>
                       <label className="check">
@@ -1171,10 +1217,12 @@ export function HallDesigner({
                           <label>
                             Seating group
                             <input
-                              value={table.group}
-                              onChange={(e) =>
-                                updateTable({ group: e.target.value })
-                              }
+                              key={`${table.id}-${table.group}`}
+                              defaultValue={table.group}
+                              onBlur={(e) => {
+                                if (e.target.value !== table.group)
+                                  updateTable({ group: e.target.value });
+                              }}
                             />
                           </label>
                           <label className="check">
@@ -1280,13 +1328,15 @@ export function HallDesigner({
                     <label>
                       Hall name
                       <input
-                        value={hall.name}
-                        onChange={(e) =>
-                          commit(
-                            { ...hall, name: e.target.value },
-                            "Rename hall",
-                          )
-                        }
+                        key={`${hall.id}-${hall.name}`}
+                        defaultValue={hall.name}
+                        onBlur={(e) => {
+                          if (e.target.value !== hall.name)
+                            commit(
+                              { ...hall, name: e.target.value },
+                              "Rename hall",
+                            );
+                        }}
                       />
                     </label>
                     <label>
@@ -1353,13 +1403,15 @@ export function HallDesigner({
                     <label>
                       Hall notes
                       <textarea
-                        value={hall.notes}
-                        onChange={(e) =>
-                          commit(
-                            { ...hall, notes: e.target.value },
-                            "Hall notes",
-                          )
-                        }
+                        key={`${hall.id}-${hall.notes}`}
+                        defaultValue={hall.notes}
+                        onBlur={(e) => {
+                          if (e.target.value !== hall.notes)
+                            commit(
+                              { ...hall, notes: e.target.value },
+                              "Hall notes",
+                            );
+                        }}
                       />
                     </label>
                   </>
@@ -1511,7 +1563,7 @@ export function HallDesigner({
                         Route label
                         <input
                           value={f.name}
-                          onChange={(e) =>
+                          onChange={(e) => {
                             commit(
                               {
                                 ...hall,
@@ -1520,8 +1572,8 @@ export function HallDesigner({
                                 ),
                               },
                               "Flow label",
-                            )
-                          }
+                            );
+                          }}
                         />
                       </label>
                       <label>

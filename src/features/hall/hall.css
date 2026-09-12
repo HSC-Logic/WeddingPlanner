@@ -215,4 +215,17 @@
     display: block;
   }
 }
-.hall-stage>svg{width:100%;height:560px;flex-shrink:1}.hall-designer .modal>svg{width:100%;height:350px}@media(max-width:600px){.hall-stage>svg{height:420px}}
+.hall-stage > svg {
+  width: 100%;
+  height: 560px;
+  flex-shrink: 1;
+}
+.hall-designer .modal > svg {
+  width: 100%;
+  height: 350px;
+}
+@media (max-width: 600px) {
+  .hall-stage > svg {
+    height: 420px;
+  }
+}

@@ -181,8 +181,9 @@ export function validateHalls(value: unknown, tableIds: Set<string>): Hall[] {
     for (const layout of [h, ...h.snapshots.map((s) => s.layout)]) {
       if (new Set(layout.layers.map((l) => l.name)).size !== 7)
         throw Error("Duplicate layers");
-      const localIds=[...layout.elements,...layout.flows].map(e=>e.id);
-      if(new Set(localIds).size!==localIds.length)throw Error("Duplicate snapshot object ID");
+      const localIds = [...layout.elements, ...layout.flows].map((e) => e.id);
+      if (new Set(localIds).size !== localIds.length)
+        throw Error("Duplicate snapshot object ID");
       for (const e of layout.elements)
         if (e.tableId && !tableIds.has(e.tableId))
           throw Error("Layout references a missing table");

@@ -1,4 +1,4 @@
-import { validateHalls } from "../features/hall/model";
+import { validateAppData } from "./validation";
 import type {
   AppData,
   Backup,
@@ -34,6 +34,16 @@ export const displayDate = (value?: string) =>
         new Date(`${value}T12:00:00`),
       )
     : "Not set";
+
+export const localDate = (value = new Date()) =>
+  `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, "0")}-${String(value.getDate()).padStart(2, "0")}`;
+export const localDateTimeMinute = (value = new Date()) =>
+  `${localDate(value)}T${String(value.getHours()).padStart(2, "0")}:${String(value.getMinutes()).padStart(2, "0")}`;
+export function addCalendarDays(value: string, amount: number) {
+  const [year, month, day] = value.split("-").map(Number);
+  const result = new Date(Date.UTC(year, month - 1, day + amount));
+  return result.toISOString().slice(0, 10);
+}
 
 export function daysUntil(date: string, today = new Date()): number {
   const [y, m, d] = date.split("-").map(Number);
@@ -123,7 +133,7 @@ export const download = (
   link.href = URL.createObjectURL(new Blob([content], { type }));
   link.download = name;
   link.click();
-  URL.revokeObjectURL(link.href);
+  setTimeout(() => URL.revokeObjectURL(link.href), 1_000);
 };
 
 export const createBackup = (data: AppData): Backup => ({
@@ -132,9 +142,17 @@ export const createBackup = (data: AppData): Backup => ({
   data,
 });
 export function parseBackup(text: string): Backup {
+  if (text.length > 5_000_000)
+    throw new Error("Backup exceeds the 5 MB limit.");
   const value: unknown = JSON.parse(text);
   if (!value || typeof value !== "object")
     throw new Error("Backup is not an object.");
+  if (
+    Object.keys(value).some(
+      (key) => !["version", "exportedAt", "data"].includes(key),
+    )
+  )
+    throw new Error("Backup contains unexpected properties.");
   const backup = value as Partial<Backup>;
   if (
     ![1, 2, 3].includes(Number(backup.version)) ||
@@ -158,18 +176,14 @@ export function parseBackup(text: string): Backup {
       typeof data.wedding.date !== "string")
   )
     throw new Error("Wedding profile is invalid.");
-  const normalized = {
+  const normalized = validateAppData({
     ...data,
     halls: data.halls ?? [],
     tables: data.tables ?? [],
     households: data.households ?? [],
     assignments: data.assignments ?? [],
-  } as AppData;
+  });
   validateSeatingReferences(normalized);
-  normalized.halls = validateHalls(
-    normalized.halls,
-    new Set(normalized.tables.map((t) => t.id)),
-  );
   return {
     version: 3,
     exportedAt: String(backup.exportedAt ?? now()),

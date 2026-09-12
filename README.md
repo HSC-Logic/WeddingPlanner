@@ -8,6 +8,7 @@ Vow is a responsive, offline-first wedding planning app. Couples can manage thei
 - Dashboard countdown, checklist progress, budget chart, guest totals, upcoming work and next activity
 - Local CRUD workflows for checklist, expenses, guests, vendors, timeline and notes
 - Reception seating with tables, reserved seats, households, manual locks, conflict reporting, print views and two CSV directories
+- Interactive 2D hall designer with room geometry, doors, windows, stages, dance floors, tables, labels, accessibility routes, undo/redo, zoom, print and SVG export
 - Search, status updates, overdue indicators, attendee totals and safe contact links
 - Versioned JSON backup with validation and preview; CSV exports protected against formula injection
 - Light/dark themes, responsive sidebar, print-friendly timeline, keyboard focus, reduced-motion support
@@ -15,7 +16,7 @@ Vow is a responsive, offline-first wedding planning app. Couples can manage thei
 
 ## Stack
 
-React 19, TypeScript strict mode, Vite, Tailwind CSS, Recharts, Lucide icons, native IndexedDB, native service worker, Vitest and Playwright. Native browser APIs replace router, date and IndexedDB wrappers because V1 has eight fixed screens and simple calendar-date rules.
+React 19, TypeScript strict mode, Vite, Tailwind CSS, Lucide icons, native IndexedDB, native service worker, Vitest and Playwright. Native browser APIs provide the local application shell, calendar-date handling and storage.
 
 ## Development
 
@@ -44,7 +45,7 @@ Preview production output with `npm run preview`.
 
 Records live in separate, versioned IndexedDB stores. Only theme preference uses localStorage. No backend, authentication, analytics, advertising, trackers, paid API, external database or cloud sync exists. Vendor phone, email and website links activate only after user action.
 
-Seating uses separate `tables`, `households`, and `assignments` stores. Effective capacity is table capacity minus reserved seats. Backup import validates guest, household and table references, duplicate assignments, and table capacity before replacing current data.
+Seating uses separate `tables`, `households`, and `assignments` stores. Effective capacity is table capacity minus reserved seats. Backup import validates every record, cross-record reference, duplicate assignment, and table capacity before replacing current data. A backup can also be restored directly from first-use setup after clearing the planner.
 
 ## Seating algorithm
 
@@ -74,4 +75,4 @@ Vite uses relative asset paths, so repository subpaths and refreshes of this sin
 - Offline installation requires one successful online production load. Browser storage quotas and eviction policies still apply.
 - GitHub Actions runs deterministic unit checks and build. Playwright is available locally but omitted from deploy workflow to keep Pages validation fast.
 
-Future versions may add encrypted multi-device sync, household invitations, seating layout, recurring reminders, richer record editing and calendar export.
+Future versions may add encrypted multi-device sync, household invitations, recurring reminders, richer record editing and calendar export.

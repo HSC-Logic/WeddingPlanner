@@ -15,17 +15,15 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@hookform/resolvers": "^5.9.1",
     "@tailwindcss/vite": "^4.3.3",
     "lucide-react": "^1.37.0",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
-    "react-hook-form": "^7.86.0",
-    "recharts": "^3.10.1",
     "tailwindcss": "^4.3.3",
     "zod": "^4.5.2"
   },
   "devDependencies": {
+    "@axe-core/playwright": "^4.13.0",
     "@playwright/test": "^1.63.0",
     "@types/node": "^24.13.3",
     "@types/react": "^19.2.18",
