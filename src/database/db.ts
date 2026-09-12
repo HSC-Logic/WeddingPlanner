@@ -13,11 +13,12 @@ const STORES: StoreName[] = [
   "tables",
   "households",
   "assignments",
+  "halls",
 ];
 
 function openDatabase(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
-    const request = indexedDB.open(DB_NAME, 2);
+    const request = indexedDB.open(DB_NAME, 3);
     request.onupgradeneeded = () =>
       STORES.forEach((name) => {
         if (!request.result.objectStoreNames.contains(name))
@@ -42,10 +43,17 @@ async function transaction<T>(
   return new Promise((resolve, reject) => {
     const tx = db.transaction(store, mode);
     const request = run(tx.objectStore(store));
-    request.onsuccess = () => resolve(request.result);
+    request.onsuccess = () => {};
     request.onerror = () =>
       reject(request.error ?? new Error("Local save failed."));
-    tx.oncomplete = () => db.close();
+    tx.oncomplete = () => {
+      db.close();
+      resolve(request.result);
+    };
+    tx.onabort = () => {
+      db.close();
+      reject(tx.error ?? new Error("Local save failed."));
+    };
   });
 }
 
@@ -74,6 +82,7 @@ export async function loadAll(): Promise<AppData> {
     tables,
     households,
     assignments,
+    halls,
   ] = await Promise.all(STORES.map((store) => repository.all<never>(store)));
   return {
     wedding: wedding[0],
@@ -86,6 +95,7 @@ export async function loadAll(): Promise<AppData> {
     tables,
     households,
     assignments,
+    halls,
   } as AppData;
 }
 

@@ -1,3 +1,4 @@
+import { HallDesigner } from "./features/hall/HallDesigner";
 import {
   Component,
   useEffect,
@@ -79,6 +80,7 @@ type Section =
   | "checklist"
   | "budget"
   | "guests"
+  | "hall"
   | "seating"
   | "vendors"
   | "timeline"
@@ -120,6 +122,7 @@ const nav: { id: Section; label: string; icon: typeof Heart }[] = [
   { id: "checklist", label: "Checklist", icon: ClipboardCheck },
   { id: "budget", label: "Budget", icon: Banknote },
   { id: "guests", label: "Guests", icon: Users },
+  { id: "hall", label: "Hall Designer", icon: LayoutDashboard },
   { id: "seating", label: "Seating", icon: Armchair },
   { id: "vendors", label: "Vendors", icon: Utensils },
   { id: "timeline", label: "Timeline", icon: CalendarDays },
@@ -244,6 +247,7 @@ function App() {
       vendors: [],
       timeline: [],
       notes: [],
+      halls: [],
       tables: [],
       households: [],
       assignments: [],
@@ -274,6 +278,7 @@ function App() {
     checklist: <Checklist data={data} save={save} remove={remove} />,
     budget: <Budget data={data} save={save} remove={remove} />,
     guests: <Guests data={data} save={save} remove={remove} />,
+    hall: <HallDesigner data={data} setData={setData} />,
     seating: <Seating data={data} setData={setData} save={save} />,
     vendors: <Vendors data={data} save={save} remove={remove} />,
     timeline: <Timeline data={data} save={save} remove={remove} />,
@@ -315,6 +320,12 @@ function App() {
                 key={id}
                 className={section === id ? "active" : ""}
                 onClick={() => {
+                  if (
+                    !window.dispatchEvent(
+                      new Event("hall-navigation", { cancelable: true }),
+                    )
+                  )
+                    return;
                   setSection(id);
                   setMenu(false);
                 }}
@@ -1436,6 +1447,11 @@ function Seating({
       return;
     const next = {
       ...data,
+      halls: data.halls.map((h) => ({
+        ...h,
+        elements: h.elements.filter((e) => e.tableId !== table.id),
+        snapshots: h.snapshots.map(s=>({...s,layout:{...s.layout,elements:s.layout.elements.filter(e=>e.tableId!==table.id)}})),
+      })),
       tables: data.tables.filter((item) => item.id !== table.id),
       assignments: data.assignments.filter((item) => item.tableId !== table.id),
       households: data.households.map((item) =>
@@ -1468,7 +1484,7 @@ function Seating({
     if (tableId) {
       const available =
         effectiveCapacity(data.tables.find((item) => item.id === tableId)!) -
-        occupied(tableId);
+        assignments.filter(a=>a.tableId===tableId).reduce((sum,a)=>sum+a.seatCount,0);
       if (household.confirmedAttendees > available)
         return alert(
           "Household does not fit. Resolve capacity before locking.",
@@ -2551,6 +2567,7 @@ function SettingsPage({
               <li>{preview.vendors.length} vendors</li>
               <li>{preview.timeline.length} timeline activities</li>
               <li>{preview.notes.length} notes</li>
+              <li>{preview.halls.length} hall layouts</li>
               <li>{preview.tables.length} seating tables</li>
               <li>{preview.households.length} households</li>
               <li>{preview.assignments.length} seating assignments</li>

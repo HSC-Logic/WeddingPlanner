@@ -1,3 +1,4 @@
+import { validateHalls } from "../features/hall/model";
 import type {
   AppData,
   Backup,
@@ -8,6 +9,7 @@ import type {
 } from "../types/models";
 
 export const emptyData = (): AppData => ({
+  halls: [],
   tasks: [],
   expenses: [],
   guests: [],
@@ -125,7 +127,7 @@ export const download = (
 };
 
 export const createBackup = (data: AppData): Backup => ({
-  version: 2,
+  version: 3,
   exportedAt: now(),
   data,
 });
@@ -135,7 +137,7 @@ export function parseBackup(text: string): Backup {
     throw new Error("Backup is not an object.");
   const backup = value as Partial<Backup>;
   if (
-    ![1, 2].includes(Number(backup.version)) ||
+    ![1, 2, 3].includes(Number(backup.version)) ||
     !backup.data ||
     typeof backup.data !== "object"
   )
@@ -158,13 +160,18 @@ export function parseBackup(text: string): Backup {
     throw new Error("Wedding profile is invalid.");
   const normalized = {
     ...data,
+    halls: data.halls ?? [],
     tables: data.tables ?? [],
     households: data.households ?? [],
     assignments: data.assignments ?? [],
   } as AppData;
   validateSeatingReferences(normalized);
+  normalized.halls = validateHalls(
+    normalized.halls,
+    new Set(normalized.tables.map((t) => t.id)),
+  );
   return {
-    version: 2,
+    version: 3,
     exportedAt: String(backup.exportedAt ?? now()),
     data: normalized,
   };

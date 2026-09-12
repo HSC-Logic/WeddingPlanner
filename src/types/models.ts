@@ -113,6 +113,7 @@ export interface SeatingAssignment extends BaseRecord {
 }
 
 export interface AppData {
+  halls: import("../features/hall/model").Hall[];
   wedding?: Wedding;
   tasks: Task[];
   expenses: Expense[];
@@ -127,7 +128,7 @@ export interface AppData {
 
 export type StoreName = Exclude<keyof AppData, "wedding"> | "wedding";
 export interface Backup {
-  version: 2;
+  version: 3;
   exportedAt: string;
   data: AppData;
 }

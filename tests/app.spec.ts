@@ -11,9 +11,15 @@ async function setup(page: import("@playwright/test").Page) {
   await page.getByLabel("Wedding date").fill("2027-02-14");
   await page.getByLabel("Total budget").fill("1000000");
   await page.getByRole("button", { name: /Start planning/ }).click();
-  await expect(page.getByText("Asha & Nimal")).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Asha & Nimal" }),
+  ).toBeVisible();
 }
-test("completes setup and checklist task", async ({ page }) => {
+test("completes setup and checklist task", async ({ page }, testInfo) => {
+  test.skip(
+    testInfo.project.name === "mobile",
+    "Covered by the desktop workflow.",
+  );
   await setup(page);
   await page.getByRole("button", { name: "Checklist" }).click();
   await page.getByRole("button", { name: "Add task" }).click();
@@ -32,12 +38,18 @@ test("mobile navigation remains usable", async ({ page }) => {
   await page.getByRole("button", { name: "Open menu" }).click();
   await expect(page.getByRole("navigation")).toBeVisible();
   await page.getByRole("button", { name: "Guests" }).click();
-  await expect(page.getByRole("heading", { name: "Guest list" })).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Guest list", exact: true }),
+  ).toBeVisible();
 });
 
 test("creates household, generates seating, preserves lock and reports capacity conflict", async ({
   page,
-}) => {
+}, testInfo) => {
+  test.skip(
+    testInfo.project.name === "mobile",
+    "Covered by the desktop workflow.",
+  );
   await setup(page);
   await page.getByRole("button", { name: "Guests" }).click();
   await page.getByRole("button", { name: "Add guest" }).click();
@@ -60,7 +72,7 @@ test("creates household, generates seating, preserves lock and reports capacity 
   await expect(page.getByText("Pereras")).toBeVisible();
   await page.getByLabel("Lock to table").selectOption({ label: "Table One" });
   await page.getByRole("button", { name: "Generate seating plan" }).click();
-  await expect(page.getByText("Locked")).toBeVisible();
+  await expect(page.getByText("Locked", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Edit" }).click();
   await page.getByLabel("Reserved seats").fill("1");
   page.once("dialog", (dialog) => dialog.accept());
