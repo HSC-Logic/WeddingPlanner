@@ -359,25 +359,41 @@ export function Dashboard({ data }: { data: AppData }) {
         />
       </div>
       <div className="dashboard-grid">
-        <section className="panel">
-          <h3>Budget at a glance</h3>
+        <section className="panel dashboard-panel budget-panel">
+          <div className="panel-heading">
+            <div>
+              <p className="eyebrow">Finances</p>
+              <h3>Budget at a glance</h3>
+            </div>
+            <span className="pill">
+              {budget.estimated
+                ? `${Math.round((budget.actual / budget.estimated) * 100)}% used`
+                : "No estimate"}
+            </span>
+          </div>
           {data.expenses.length ? (
-            <div className="chart" aria-label="Budget comparison chart">
+            <div className="budget-breakdown" aria-label="Budget comparison">
               {chart.map((item) => {
                 const maximum = Math.max(
                   1,
                   ...chart.map((entry) => entry.value),
                 );
                 return (
-                  <div className="chart-column" key={item.name}>
-                    <span>{money(item.value * 100, wedding.currency)}</span>
-                    <i
-                      style={{
-                        height: `${Math.max(2, (item.value / maximum) * 160)}px`,
-                        background: wedding.color,
-                      }}
-                    />
-                    <strong>{item.name}</strong>
+                  <div className="budget-row" key={item.name}>
+                    <div>
+                      <span>{item.name}</span>
+                      <strong>
+                        {money(item.value * 100, wedding.currency)}
+                      </strong>
+                    </div>
+                    <div className="budget-meter">
+                      <i
+                        style={{
+                          width: `${Math.max(2, (item.value / maximum) * 100)}%`,
+                          background: wedding.color,
+                        }}
+                      />
+                    </div>
                   </div>
                 );
               })}
@@ -389,10 +405,20 @@ export function Dashboard({ data }: { data: AppData }) {
             />
           )}
         </section>
-        <section className="panel">
+        <section
+          className={`panel dashboard-panel schedule-panel${overdue.length ? "" : " single"}`}
+        >
           {overdue.length > 0 && (
-            <>
-              <h3 className="danger-text">Overdue</h3>
+            <section className="dashboard-section">
+              <div className="panel-heading">
+                <div>
+                  <p className="eyebrow danger-text">Needs attention</p>
+                  <h3>Overdue</h3>
+                </div>
+                <span className="count-badge danger-text">
+                  {taskDates.overdue.length}
+                </span>
+              </div>
               <div className="compact-list overdue-list">
                 {overdue.map((task) => (
                   <div key={task.id}>
@@ -406,41 +432,54 @@ export function Dashboard({ data }: { data: AppData }) {
                   </div>
                 ))}
               </div>
-            </>
+            </section>
           )}
-          <h3>Coming up</h3>
-          {upcoming.length ? (
-            <div className="compact-list">
-              {upcoming.map((task) => (
-                <div key={task.id}>
-                  <span className={`priority ${task.priority}`} />{" "}
-                  <div>
-                    <strong>{task.title}</strong>
-                    <small>
-                      {displayDate(task.dueDate)} · {task.category}
-                    </small>
-                  </div>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <Empty
-              title="Clear horizon"
-              copy="No pending tasks with due dates."
-            />
-          )}
-          {nextActivity && (
-            <div className="next">
-              <CalendarDays />
+          <section className="dashboard-section upcoming-section">
+            <div className="panel-heading">
               <div>
-                <small>Next activity</small>
-                <strong>{nextActivity.title}</strong>
+                <p className="eyebrow">Schedule</p>
+                <h3>Coming up</h3>
+              </div>
+              {upcoming.length > 0 && (
+                <span className="count-badge">{upcoming.length}</span>
+              )}
+            </div>
+            {upcoming.length ? (
+              <div className="compact-list">
+                {upcoming.map((task) => (
+                  <div key={task.id}>
+                    <span className={`priority ${task.priority}`} />{" "}
+                    <div>
+                      <strong>{task.title}</strong>
+                      <small>
+                        {displayDate(task.dueDate)} · {task.category}
+                      </small>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="dashboard-empty">
+                <Heart />
                 <span>
-                  {displayDate(nextActivity.date)} at {nextActivity.startTime}
+                  <strong>Clear horizon</strong>
+                  <small>No pending tasks with due dates.</small>
                 </span>
               </div>
-            </div>
-          )}
+            )}
+            {nextActivity && (
+              <div className="next">
+                <CalendarDays />
+                <div>
+                  <small>Next activity</small>
+                  <strong>{nextActivity.title}</strong>
+                  <span>
+                    {displayDate(nextActivity.date)} at {nextActivity.startTime}
+                  </span>
+                </div>
+              </div>
+            )}
+          </section>
         </section>
       </div>
       <section className="panel seating-dashboard">
