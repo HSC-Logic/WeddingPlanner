@@ -9,6 +9,8 @@ import {
 import type React from "react";
 import {
   ArchiveRestore,
+  ArrowDown,
+  ArrowUp,
   CalendarDays,
   CheckCircle2,
   Download,
@@ -907,6 +909,13 @@ export function Guests({
     [editing, setEditing] = useState<Guest | null>(null),
     [query, setQuery] = useState(""),
     stats = guestStats(data.guests);
+  const partnerOne = data.wedding?.partnerOne || "Partner one";
+  const partnerTwo = data.wedding?.partnerTwo || "Partner two";
+  const groupLabels: Record<Guest["group"], string> = {
+    "partner-one": partnerOne,
+    "partner-two": partnerTwo,
+    mutual: `${partnerOne} & ${partnerTwo}`,
+  };
   const guests = data.guests.filter((g) =>
     [g.name, g.phone, g.email].some((v) =>
       v.toLowerCase().includes(query.toLowerCase()),
@@ -986,7 +995,7 @@ export function Guests({
                 <h3>{g.name}</h3>
                 <p>
                   {g.attendees} attendee{g.attendees === 1 ? "" : "s"} ·{" "}
-                  {g.group.replace("-", " ")}
+                  {groupLabels[g.group]}
                 </p>
                 <span className={`pill ${g.rsvp}`}>{g.rsvp}</span>
                 <span className="pill">invite {g.invitation}</span>
@@ -1052,11 +1061,13 @@ export function Guests({
             />
             <div className="form-grid">
               <label>
-                Group
+                Guest of
                 <select name="group" defaultValue={editing?.group}>
-                  <option value="partner-one">Partner one</option>
-                  <option value="partner-two">Partner two</option>
-                  <option value="mutual">Mutual</option>
+                  <option value="partner-one">{partnerOne}</option>
+                  <option value="partner-two">{partnerTwo}</option>
+                  <option value="mutual">
+                    {partnerOne} &amp; {partnerTwo}
+                  </option>
                 </select>
               </label>
               <Field
@@ -1495,41 +1506,64 @@ export function Seating({
                   key={table.id}
                 >
                   <header>
-                    <div>
-                      <span className="pill">{table.group || "Any group"}</span>
-                      {table.locked && (
-                        <span className="pill danger">Auto locked</span>
-                      )}
+                    <div className="seating-table-heading">
+                      <div className="seating-table-badges">
+                        <span className="pill">
+                          {table.group || "Any group"}
+                        </span>
+                        {table.locked && (
+                          <span className="pill danger">Auto locked</span>
+                        )}
+                      </div>
                       <h3>{table.name}</h3>
                     </div>
-                    <button
-                      className="no-print"
-                      onClick={() => {
-                        setEditingTable(table);
-                        setTableOpen(true);
-                      }}
-                    >
-                      Edit
-                    </button>
-                    <button
-                      className="icon danger-button no-print"
-                      onClick={() => deleteTable(table)}
-                      aria-label={`Delete ${table.name}`}
-                    >
-                      <Trash2 />
-                    </button>
+                    <div className="seating-table-actions no-print">
+                      <button
+                        className="icon"
+                        onClick={() => {
+                          setEditingTable(table);
+                          setTableOpen(true);
+                        }}
+                        aria-label={`Edit ${table.name}`}
+                        title="Edit table"
+                      >
+                        <Pencil />
+                      </button>
+                      <button
+                        className="icon danger-button"
+                        onClick={() => deleteTable(table)}
+                        aria-label={`Delete ${table.name}`}
+                        title="Delete table"
+                      >
+                        <Trash2 />
+                      </button>
+                    </div>
                   </header>
-                  <div className="seat-meter">
+                  <div
+                    className="seat-meter"
+                    role="progressbar"
+                    aria-label={`${table.name} occupancy`}
+                    aria-valuemin={0}
+                    aria-valuemax={effective}
+                    aria-valuenow={used}
+                  >
                     <span
                       style={{
                         width: `${effective ? Math.min(100, (used / effective) * 100) : 0}%`,
                       }}
                     />
                   </div>
-                  <p>
-                    {used} occupied · {table.reservedSeats} reserved ·{" "}
-                    <strong>{Math.max(0, effective - used)} remaining</strong>
-                  </p>
+                  <div className="seating-table-stats">
+                    <span>
+                      <strong>{used}</strong> occupied
+                    </span>
+                    <span>
+                      <strong>{table.reservedSeats}</strong> reserved
+                    </span>
+                    <span>
+                      <strong>{Math.max(0, effective - used)}</strong> available
+                    </span>
+                  </div>
                   <div className="seated-list">
                     {tableAssignments.length ? (
                       tableAssignments.map((assignment) => {
@@ -1555,6 +1589,7 @@ export function Seating({
                   </div>
                   <footer className="no-print">
                     <button
+                      className="icon"
                       disabled={table.displayOrder === 0}
                       onClick={() =>
                         save("tables", {
@@ -1563,10 +1598,13 @@ export function Seating({
                           updatedAt: now(),
                         })
                       }
+                      aria-label={`Move ${table.name} up`}
+                      title="Move table up"
                     >
-                      Move up
+                      <ArrowUp />
                     </button>
                     <button
+                      className="icon"
                       onClick={() =>
                         save("tables", {
                           ...table,
@@ -1574,8 +1612,10 @@ export function Seating({
                           updatedAt: now(),
                         })
                       }
+                      aria-label={`Move ${table.name} down`}
+                      title="Move table down"
                     >
-                      Move down
+                      <ArrowDown />
                     </button>
                   </footer>
                 </article>
