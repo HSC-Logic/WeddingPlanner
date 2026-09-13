@@ -304,3 +304,148 @@ test("critical screens reflow without horizontal page scrolling", async ({
     ).toBe(true);
   }
 });
+
+test("primary records can be edited without changing their identity", async ({
+  page,
+}, testInfo) => {
+  test.skip(
+    testInfo.project.name === "mobile",
+    "Covered by the desktop CRUD workflow.",
+  );
+  await setup(page);
+
+  await page.getByRole("button", { name: "Checklist" }).click();
+  await page.getByRole("button", { name: "Add task" }).click();
+  await page.getByLabel("Task title").fill("Draft task");
+  await page.getByLabel("Due date").fill("2027-01-01");
+  await page.getByRole("button", { name: "Save task" }).click();
+  await page.getByRole("button", { name: "Edit Draft task" }).click();
+  await page.getByLabel("Task title").fill("Edited task");
+  await page.getByRole("button", { name: "Update task" }).click();
+  await expect(page.getByText("Edited task")).toBeVisible();
+
+  await page.getByRole("button", { name: "Budget" }).click();
+  await page.getByRole("button", { name: "Add expense" }).click();
+  await page.getByLabel("Description").fill("Draft expense");
+  await page.getByLabel("Estimated cost").fill("100");
+  await page.getByLabel("Actual cost").fill("100");
+  await page.getByLabel("Amount paid").fill("0");
+  await page.getByRole("button", { name: "Save expense" }).click();
+  await page.getByRole("button", { name: "Edit Draft expense" }).click();
+  await page.getByLabel("Description").fill("Edited expense");
+  await page.getByRole("button", { name: "Update expense" }).click();
+  await expect(page.getByText("Edited expense")).toBeVisible();
+
+  await page.getByRole("button", { name: "Guests" }).click();
+  await page.getByRole("button", { name: "Add guest" }).click();
+  await page.getByLabel("Full name").fill("Draft guest");
+  await page.getByRole("button", { name: "Save guest" }).click();
+  await page.getByRole("button", { name: "Edit Draft guest" }).click();
+  await page.getByLabel("Full name").fill("Edited guest");
+  await page.getByRole("button", { name: "Update guest" }).click();
+  await expect(
+    page.getByRole("heading", { name: "Edited guest" }),
+  ).toBeVisible();
+
+  await page.getByRole("button", { name: "Vendors" }).click();
+  await page.getByRole("button", { name: "Add vendor" }).click();
+  await page.getByLabel("Business or vendor name").fill("Draft vendor");
+  await page.getByLabel("Service category").fill("Venue");
+  await page.getByRole("button", { name: "Save vendor" }).click();
+  await page.getByRole("button", { name: "Edit Draft vendor" }).click();
+  await page.getByLabel("Business or vendor name").fill("Edited vendor");
+  await page.getByRole("button", { name: "Update vendor" }).click();
+  await expect(
+    page.getByRole("heading", { name: "Edited vendor" }),
+  ).toBeVisible();
+
+  await page.getByRole("button", { name: "Timeline" }).click();
+  await page.getByRole("button", { name: "Add activity" }).click();
+  await page.getByLabel("Activity title").fill("Draft activity");
+  await page.getByLabel("Start time").fill("10:00");
+  await page.getByRole("button", { name: "Save activity" }).click();
+  await page.getByRole("button", { name: "Edit Draft activity" }).click();
+  await page.getByLabel("Activity title").fill("Edited activity");
+  await page.getByRole("button", { name: "Update activity" }).click();
+  await expect(
+    page.getByRole("heading", { name: "Edited activity" }),
+  ).toBeVisible();
+
+  await page.getByRole("button", { name: "Notes" }).click();
+  await page.getByRole("button", { name: "Add note" }).click();
+  await page.getByLabel("Title").fill("Draft note");
+  await page.getByLabel("Content").fill("Original content");
+  await page.getByRole("button", { name: "Save note" }).click();
+  await page.getByRole("button", { name: "Edit Draft note" }).click();
+  await page.getByLabel("Title").fill("Edited note");
+  await page.getByLabel("Content").fill("Updated content");
+  await page.getByRole("button", { name: "Update note" }).click();
+  await expect(
+    page.getByRole("heading", { name: "Edited note" }),
+  ).toBeVisible();
+
+  const records = await page.evaluate(
+    () =>
+      new Promise<
+        Record<string, { id: string; createdAt: string; updatedAt: string }>
+      >((resolve, reject) => {
+        const open = indexedDB.open("vow-planner");
+        open.onerror = () => reject(open.error);
+        open.onsuccess = () => {
+          const db = open.result;
+          const stores = [
+            "tasks",
+            "expenses",
+            "guests",
+            "vendors",
+            "timeline",
+            "notes",
+          ];
+          const transaction = db.transaction(stores);
+          const result: Record<
+            string,
+            { id: string; createdAt: string; updatedAt: string }
+          > = {};
+          for (const store of stores) {
+            const request = transaction.objectStore(store).getAll();
+            request.onsuccess = () => {
+              result[store] = request.result[0];
+            };
+          }
+          transaction.oncomplete = () => {
+            db.close();
+            resolve(result);
+          };
+          transaction.onerror = () => reject(transaction.error);
+        };
+      }),
+  );
+  for (const record of Object.values(records)) {
+    expect(record.id).toBeTruthy();
+    expect(record.updatedAt >= record.createdAt).toBe(true);
+  }
+});
+
+test("dashboard separates overdue work and never reports an empty seating plan complete", async ({
+  page,
+}, testInfo) => {
+  test.skip(
+    testInfo.project.name === "mobile",
+    "Dashboard logic is viewport independent.",
+  );
+  await setup(page);
+  await expect(
+    page.getByRole("heading", {
+      name: "Add confirmed guests to begin seating",
+    }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "Checklist" }).click();
+  await page.getByRole("button", { name: "Add task" }).click();
+  await page.getByLabel("Task title").fill("Past deadline");
+  await page.getByLabel("Due date").fill("2000-01-01");
+  await page.getByRole("button", { name: "Save task" }).click();
+  await page.getByRole("button", { name: "Dashboard" }).click();
+  await expect(page.getByRole("heading", { name: "Overdue" })).toBeVisible();
+  await expect(page.getByText("Past deadline")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Coming up" })).toBeVisible();
+});

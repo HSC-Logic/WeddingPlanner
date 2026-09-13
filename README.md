@@ -59,6 +59,8 @@ Use **Settings & Backup → Export full backup** regularly. Import accepts JSON 
 
 After first successful load, use browser **Install app** or **Add to Home Screen**. Static application files are cached; IndexedDB data is never placed in service-worker cache. New network assets refresh cache while cached shell remains available offline.
 
+The manifest includes 192×192 and 512×512 PNG icons, a dedicated maskable 512×512 icon, the scalable SVG mark and an Apple touch icon. Installation metadata, service-worker control and offline reload are automated in Chromium; Safari/iOS and Android home-screen appearance still require real-device review.
+
 ## GitHub Pages deployment
 
 1. Push to `main`.
@@ -70,9 +72,9 @@ Vite uses relative asset paths, so repository subpaths and refreshes of this sin
 ## Version 1 limits
 
 - One wedding profile per browser profile; no accounts, sharing, cloud sync, online RSVP page or automatic invitations.
-- Forms support create, delete and common inline status changes. Full record editing is limited to wedding details in V1.
+- Tasks, expenses, guests, vendors, timeline activities and notes support create, edit and delete workflows while preserving stable record identities.
 - Automatic seating never splits households and does not optimize social relationships beyond preferred table group and best-fit capacity.
 - Offline installation requires one successful online production load. Browser storage quotas and eviction policies still apply.
 - GitHub Actions runs deterministic unit checks and build. Playwright is available locally but omitted from deploy workflow to keep Pages validation fast.
 
-Future versions may add encrypted multi-device sync, household invitations, recurring reminders, richer record editing and calendar export.
+Future versions may add encrypted multi-device sync, household invitations, recurring reminders and calendar export.

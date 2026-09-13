@@ -37,6 +37,8 @@ test("primary workflows have no automated WCAG A/AA violations", async ({
     expect(results.violations, section).toEqual([]);
   }
 
+  await page.getByRole("switch", { name: "Dark theme" }).click();
+
   await page.getByRole("button", { name: "Guests", exact: true }).click();
   await page.getByRole("button", { name: "Add guest" }).click();
   const dialogResults = await new AxeBuilder({ page })
@@ -51,6 +53,12 @@ test("primary workflows have no automated WCAG A/AA violations", async ({
     .click();
   await page.getByRole("button", { name: "Next" }).click();
   await page.getByRole("button", { name: "Create space" }).click();
+  await expect(page.getByRole("button", { name: "Zoom out" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Zoom in" })).toBeVisible();
+  const lockNames = await page
+    .getByRole("button", { name: /layer$/ })
+    .allTextContents();
+  expect(lockNames.length).toBeGreaterThan(1);
   const hallResults = await new AxeBuilder({ page })
     .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"])
     .analyze();

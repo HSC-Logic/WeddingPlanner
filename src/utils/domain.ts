@@ -4,6 +4,8 @@ import type {
   Backup,
   Expense,
   Guest,
+  SeatingAssignment,
+  SeatingTable,
   Task,
   Vendor,
 } from "../types/models";
@@ -66,6 +68,60 @@ export const taskStats = (tasks: Task[]) => ({
       )
     : 0,
 });
+
+export function dashboardTasks(tasks: Task[], today = localDate()) {
+  const dated = tasks
+    .filter((task) => task.status !== "completed" && task.dueDate)
+    .sort(
+      (a, b) => a.dueDate.localeCompare(b.dueDate) || a.id.localeCompare(b.id),
+    );
+  return {
+    overdue: dated.filter((task) => task.dueDate < today),
+    upcoming: dated.filter((task) => task.dueDate >= today),
+  };
+}
+
+export function seatingDashboardState({
+  confirmed,
+  tables,
+  assignments,
+  conflicts,
+}: {
+  confirmed: number;
+  tables: SeatingTable[];
+  assignments: SeatingAssignment[];
+  conflicts: number;
+}) {
+  const capacity = tables.reduce(
+    (sum, table) => sum + Math.max(0, table.capacity - table.reservedSeats),
+    0,
+  );
+  const assigned = assignments.reduce(
+    (sum, assignment) => sum + assignment.seatCount,
+    0,
+  );
+  if (confirmed === 0)
+    return {
+      capacity,
+      assigned,
+      message: "Add confirmed guests to begin seating",
+    };
+  if (tables.length === 0)
+    return { capacity, assigned, message: "Create reception tables to begin" };
+  if (conflicts > 0)
+    return {
+      capacity,
+      assigned,
+      message: `${conflicts} seating ${conflicts === 1 ? "conflict needs" : "conflicts need"} attention`,
+    };
+  if (assigned < confirmed)
+    return {
+      capacity,
+      assigned,
+      message: `${confirmed - assigned} confirmed attendees need seats`,
+    };
+  return { capacity, assigned, message: "Confirmed guests are seated" };
+}
 
 export const budgetStats = (expenses: Expense[], budgetCents = 0) => {
   const estimated = expenses.reduce(

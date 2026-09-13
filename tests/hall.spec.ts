@@ -172,14 +172,28 @@ test("tablet touch selection and movement; mobile read-only view", async ({
   await stage.tap();
   await expect(page.getByLabel("X position (m)")).toBeVisible();
   const before = await stage.getAttribute("transform");
-  await page.getByRole("button", { name: "Move →", exact: true }).tap();
+  await page.getByRole("button", { name: "Move selected right" }).tap();
   await expect(stage).not.toHaveAttribute("transform", before!);
   await page.screenshot({
     path: "/private/tmp/hall-tablet.png",
     fullPage: true,
   });
-  await page.setViewportSize({ width: 390, height: 844 });
-  await expect(page.getByText(/Mobile view:/)).toBeVisible();
+  for (const viewport of [
+    { width: 320, height: 568 },
+    { width: 360, height: 800 },
+    { width: 390, height: 844 },
+    { width: 412, height: 915 },
+    { width: 600, height: 900 },
+  ]) {
+    await page.setViewportSize(viewport);
+    await expect(page.getByText(/Mobile view:/)).toBeVisible();
+    await expect(page.locator(".hall-stage")).toBeVisible();
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth <= window.innerWidth,
+      ),
+    ).toBe(true);
+  }
   await stage.tap();
   await expect(page.locator(".hall-properties")).toHaveCount(0);
   await page.screenshot({

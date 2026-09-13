@@ -5,6 +5,7 @@ import {
   cents,
   createBackup,
   csvCell,
+  dashboardTasks,
   daysUntil,
   emptyData,
   guestStats,
@@ -12,6 +13,7 @@ import {
   money,
   parseBackup,
   paymentStatus,
+  seatingDashboardState,
   taskStats,
   vendorBalance,
 } from "./domain";
@@ -82,6 +84,84 @@ describe("planning calculations", () => {
     expect(localDate(new Date(2026, 0, 2, 0, 5))).toBe("2026-01-02");
     expect(addCalendarDays("2028-03-01", -1)).toBe("2028-02-29");
     expect(addCalendarDays("2026-12-31", 1)).toBe("2027-01-01");
+  });
+  it("separates overdue work from tasks due today and later", () => {
+    const task = (
+      id: string,
+      dueDate: string,
+      status: Task["status"] = "pending",
+    ) =>
+      ({
+        ...base,
+        id,
+        title: id,
+        category: "Other",
+        notes: "",
+        dueDate,
+        priority: "low",
+        status,
+      }) as Task;
+    expect(
+      dashboardTasks(
+        [
+          task("tomorrow", "2026-09-14"),
+          task("yesterday", "2026-09-12"),
+          task("today", "2026-09-13"),
+          task("done", "2026-09-11", "completed"),
+        ],
+        "2026-09-13",
+      ),
+    ).toEqual({
+      overdue: [expect.objectContaining({ id: "yesterday" })],
+      upcoming: [
+        expect.objectContaining({ id: "today" }),
+        expect.objectContaining({ id: "tomorrow" }),
+      ],
+    });
+  });
+  it("derives explicit empty, incomplete, conflict and complete seating states", () => {
+    const table = { ...base, capacity: 8, reservedSeats: 1 } as never;
+    const assignment = { ...base, seatCount: 3 } as never;
+    expect(
+      seatingDashboardState({
+        confirmed: 0,
+        tables: [],
+        assignments: [],
+        conflicts: 0,
+      }).message,
+    ).toMatch(/Add confirmed/);
+    expect(
+      seatingDashboardState({
+        confirmed: 2,
+        tables: [],
+        assignments: [],
+        conflicts: 0,
+      }).message,
+    ).toMatch(/Create reception tables/);
+    expect(
+      seatingDashboardState({
+        confirmed: 4,
+        tables: [table],
+        assignments: [assignment],
+        conflicts: 0,
+      }).message,
+    ).toMatch(/1 confirmed/);
+    expect(
+      seatingDashboardState({
+        confirmed: 3,
+        tables: [table],
+        assignments: [assignment],
+        conflicts: 1,
+      }).message,
+    ).toMatch(/conflict/);
+    expect(
+      seatingDashboardState({
+        confirmed: 3,
+        tables: [table],
+        assignments: [assignment],
+        conflicts: 0,
+      }).message,
+    ).toBe("Confirmed guests are seated");
   });
   it("formats currency", () => expect(money(12345, "USD")).toMatch(/123\.45/));
   it("parses grouped currency input", () =>

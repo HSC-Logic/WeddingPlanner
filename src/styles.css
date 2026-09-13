@@ -12,6 +12,7 @@
   --muted: #786c66;
   --line: #dfd5cc;
   --accent: #8c4f55;
+  --accent-ink: #8c4f55;
   --accent-soft: #ead8d6;
   --danger: #a53f3f;
   --shadow: 0 16px 40px rgba(79, 58, 48, 0.08);
@@ -23,7 +24,8 @@
   --text: #f4ece5;
   --muted: #c3b4ac;
   --line: #493f3a;
-  --accent: #d18e92;
+  --accent: #9e5059;
+  --accent-ink: #e2a8ac;
   --accent-soft: #4a3032;
   --danger: #ff8f8f;
   --shadow: 0 16px 40px rgba(0, 0, 0, 0.28);
@@ -216,7 +218,7 @@ small {
   font-family: ui-sans-serif, sans-serif;
   font-size: 10px;
   font-weight: 800;
-  color: var(--accent);
+  color: var(--accent-ink);
 }
 .header-actions,
 .actions,

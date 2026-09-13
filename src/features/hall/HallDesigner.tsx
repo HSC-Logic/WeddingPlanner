@@ -31,6 +31,14 @@ import { validateLayout } from "./validation";
 import { Plan, Rulers, assignmentNames } from "./Canvas";
 import { disclaimer, exportPng, printPlan } from "./export";
 import "./hall.css";
+import { HallToolbar } from "./HallToolbar";
+import { HallLibrary } from "./HallLibrary";
+import {
+  HallExportPanel,
+  HallLayersPanel,
+  HallPropertiesPanel,
+  HallValidationPanel,
+} from "./HallPanels";
 const flowKinds = [
   "Guest entrance",
   "Ceremony-to-reception movement",
@@ -74,7 +82,7 @@ export function HallDesigner({
     ),
     [paper, setPaper] = useState("A4"),
     [orientation, setOrientation] = useState("landscape"),
-    [small, setSmall] = useState(window.innerWidth < 600),
+    [small, setSmall] = useState(window.innerWidth <= 600),
     [panMode, setPanMode] = useState(false),
     [multiSelect, setMultiSelect] = useState(false);
   const hall = data.halls.find((h) => h.id === active),
@@ -158,7 +166,7 @@ export function HallDesigner({
   useEffect(() => {
     mounted.current = true;
     const resize = () => {
-      setSmall(window.innerWidth < 600);
+      setSmall(window.innerWidth <= 600);
       if (frame.current) setFrameWidth(frame.current.clientWidth);
     };
     resize();
@@ -734,185 +742,71 @@ export function HallDesigner({
       )}
       {hall && shown && (
         <>
-          <div className="hall-toolbar">
-            <label>
-              Space
-              <select
-                value={active}
-                onChange={(e) => {
-                  if (
-                    pending.current &&
-                    !confirm("Changes are saving. Switch spaces?")
-                  )
-                    return;
-                  flush();
-                  setActive(e.target.value);
-                  setSelected([]);
-                  setHistory({ past: [], future: [] });
-                  setZoom(1);
-                  setPan({ x: 0, y: 0 });
-                }}
-              >
-                {data.halls.map((h) => (
-                  <option key={h.id} value={h.id}>
-                    {h.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label>
-              View
-              <select value={mode} onChange={(e) => setMode(e.target.value)}>
-                <option value="complete">Complete layout</option>
-                <option value="seating">Seating only</option>
-                <option value="flow">Flow View</option>
-              </select>
-            </label>
-            <button onClick={() => setZoom((z) => Math.max(0.25, z / 1.2))}>
-              −
-            </button>
-            <output>{Math.round(zoom * 100)}%</output>
-            <button onClick={() => setZoom((z) => Math.min(5, z * 1.2))}>
-              +
-            </button>
-            <button
-              onClick={() => {
-                setZoom(1);
-                setPan({ x: 0, y: 0 });
-              }}
-            >
-              Fit to screen / Reset
-            </button>
-            {!small && (
-              <button
-                aria-pressed={multiSelect}
-                onClick={() => setMultiSelect(!multiSelect)}
-              >
-                Multi-select
-              </button>
-            )}
-            <button aria-pressed={panMode} onClick={() => setPanMode(!panMode)}>
-              Pan
-            </button>
-            <label className="check">
-              <input
-                type="checkbox"
-                checked={grid}
-                onChange={(e) => setGrid(e.target.checked)}
-              />
-              Grid
-            </label>
-            <label className="check">
-              <input
-                type="checkbox"
-                checked={snapping}
-                onChange={(e) => setSnapping(e.target.checked)}
-              />
-              Snap
-            </label>
-            <label className="check">
-              <input
-                type="checkbox"
-                checked={clearance}
-                onChange={(e) => setClearance(e.target.checked)}
-              />
-              Clearance
-            </label>
-            <label className="check">
-              <input
-                type="checkbox"
-                checked={guestNames}
-                onChange={(e) => setGuestNames(e.target.checked)}
-              />
-              Guest names
-            </label>
-            {!small && (
-              <>
-                <button
-                  disabled={!history.past.length}
-                  onClick={() => undo("undo")}
-                >
-                  Undo
-                </button>
-                <button
-                  disabled={!history.future.length}
-                  onClick={() => undo("redo")}
-                >
-                  Redo
-                </button>
-              </>
-            )}
-          </div>
+          <HallToolbar
+            halls={data.halls}
+            active={active}
+            mode={mode}
+            zoom={zoom}
+            small={small}
+            multiSelect={multiSelect}
+            panMode={panMode}
+            grid={grid}
+            snapping={snapping}
+            clearance={clearance}
+            guestNames={guestNames}
+            canUndo={history.past.length > 0}
+            canRedo={history.future.length > 0}
+            onSpace={(id) => {
+              if (
+                pending.current &&
+                !confirm("Changes are saving. Switch spaces?")
+              )
+                return;
+              flush();
+              setActive(id);
+              setSelected([]);
+              setHistory({ past: [], future: [] });
+              setZoom(1);
+              setPan({ x: 0, y: 0 });
+            }}
+            onMode={setMode}
+            onZoom={setZoom}
+            onReset={() => {
+              setZoom(1);
+              setPan({ x: 0, y: 0 });
+            }}
+            onMultiSelect={() => setMultiSelect(!multiSelect)}
+            onPanMode={() => setPanMode(!panMode)}
+            onGrid={setGrid}
+            onSnapping={setSnapping}
+            onClearance={setClearance}
+            onGuestNames={setGuestNames}
+            onUndo={() => undo("undo")}
+            onRedo={() => undo("redo")}
+          />
           <div className="hall-workspace">
             {!small && (
-              <aside className="hall-library">
-                <h3>Element library</h3>
-                <p>Drag into the hall, or tap to add.</p>
-                {Object.entries(library).map(([group, items]) => (
-                  <details key={group} open={group === "Wedding facilities"}>
-                    <summary>{group}</summary>
-                    <div className="library-grid">
-                      {items.map((type) => (
-                        <button
-                          key={type}
-                          draggable
-                          onDragStart={(e) =>
-                            e.dataTransfer.setData("text/plain", type)
-                          }
-                          onClick={() => add(type)}
-                        >
-                          {type}
-                        </button>
-                      ))}
-                    </div>
-                  </details>
-                ))}
-                <details open>
-                  <summary>Unplaced seating tables</summary>
-                  {data.tables
-                    .filter(
-                      (t) =>
-                        !data.halls.some((h) =>
-                          h.elements.some((e) => e.tableId === t.id),
-                        ),
-                    )
-                    .map((t) => (
-                      <button
-                        key={t.id}
-                        onClick={() =>
-                          add(
-                            t.shape === "round"
-                              ? "Round table"
-                              : "Rectangular table",
-                            undefined,
-                            t,
-                          )
-                        }
-                      >
-                        {t.name} · {t.capacity} seats
-                      </button>
-                    ))}
-                </details>
-                <button
-                  onClick={() =>
-                    setSuggestion(
-                      suggest(
-                        hall,
-                        data.tables.filter(
-                          (t) =>
-                            !data.halls.some(
-                              (h) =>
-                                h.id !== hall.id &&
-                                h.elements.some((e) => e.tableId === t.id),
-                            ),
-                        ),
+              <HallLibrary
+                data={data}
+                onAdd={(type, table) => void add(type, undefined, table)}
+                onSuggest={() =>
+                  setSuggestion(
+                    suggest(
+                      hall,
+                      data.tables.filter(
+                        (table) =>
+                          !data.halls.some(
+                            (space) =>
+                              space.id !== hall.id &&
+                              space.elements.some(
+                                (element) => element.tableId === table.id,
+                              ),
+                          ),
                       ),
-                    )
-                  }
-                >
-                  Suggest Table Layout
-                </button>
-              </aside>
+                    ),
+                  )
+                }
+              />
             )}
             <div className="hall-stage" ref={frame}>
               <svg
@@ -1090,8 +984,9 @@ export function HallDesigner({
               </div>
             </div>
             {!small && (
-              <aside className="hall-properties">
-                <h3>{element ? "Element properties" : "Hall settings"}</h3>
+              <HallPropertiesPanel
+                title={element ? "Element properties" : "Hall settings"}
+              >
                 {element ? (
                   <>
                     <label>
@@ -1308,7 +1203,7 @@ export function HallDesigner({
                         ].map(([label, x, y]) => (
                           <button
                             key={label}
-                            aria-label={`Move ${label}`}
+                            aria-label={`Move selected ${label === "←" ? "left" : label === "→" ? "right" : label === "↑" ? "up" : "down"}`}
                             onClick={() =>
                               move(
                                 selected,
@@ -1416,7 +1311,7 @@ export function HallDesigner({
                     </label>
                   </>
                 )}
-              </aside>
+              </HallPropertiesPanel>
             )}
           </div>
           <div className="hall-bottom">
@@ -1446,8 +1341,7 @@ export function HallDesigner({
                 ))}
               </div>
             </section>
-            <section className="panel">
-              <h3>Placement review ({issues.length})</h3>
+            <HallValidationPanel count={issues.length}>
               <div className="hall-issues">
                 {issues.slice(0, 150).map((issue, i) => (
                   <button key={i} onClick={() => setSelected(issue.ids)}>
@@ -1462,10 +1356,9 @@ export function HallDesigner({
                 )}
                 {!issues.length && <p>No placement issues detected.</p>}
               </div>
-            </section>
+            </HallValidationPanel>
             {!small && (
-              <section className="panel">
-                <h3>Layers & flow paths</h3>
+              <HallLayersPanel>
                 {hall.layers.map((l, i) => (
                   <div className="hall-layer" key={l.name}>
                     <label className="check">
@@ -1489,6 +1382,7 @@ export function HallDesigner({
                       {l.name}
                     </label>
                     <button
+                      aria-label={`${l.locked ? "Unlock" : "Lock"} ${l.name} layer`}
                       onClick={() =>
                         commit(
                           {
@@ -1504,7 +1398,7 @@ export function HallDesigner({
                       {l.locked ? "Unlock" : "Lock"}
                     </button>
                     <button
-                      aria-label={`Raise ${l.name}`}
+                      aria-label={`Move ${l.name} layer up`}
                       disabled={i === hall.layers.length - 1}
                       onClick={() => {
                         const layers = [...hall.layers];
@@ -1695,10 +1589,9 @@ export function HallDesigner({
                     </fieldset>
                   </details>
                 ))}
-              </section>
+              </HallLayersPanel>
             )}
-            <section className="panel">
-              <h3>Save & export</h3>
+            <HallExportPanel>
               <p>{disclaimer}</p>
               <label>
                 Paper size
@@ -1833,7 +1726,7 @@ export function HallDesigner({
                   </label>
                 </>
               )}
-            </section>
+            </HallExportPanel>
           </div>
         </>
       )}

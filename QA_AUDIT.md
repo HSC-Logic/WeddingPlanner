@@ -5,11 +5,11 @@ Scope: repository, configured build and validation tools, Chromium desktop/mobil
 
 ## Executive summary
 
-The audit confirmed and fixed 22 defects: 6 high, 12 medium, and 4 low. The highest-risk findings were incomplete backup validation, an unusable restore path after clearing all data, orphaned cross-module records, seating corruption after RSVP changes, and forms that discarded input after failed IndexedDB writes. Regression coverage was added for database migration and failure handling, backup recovery, record integrity, seating synchronization, accessibility, responsive reflow, and representative Hall Designer load.
+The audit confirmed and fixed 30 defects: 9 high, 17 medium, and 4 low. The highest-risk findings were incomplete backup validation, an unusable restore path after clearing all data, orphaned cross-module records, seating corruption after RSVP changes, missing record editing, and inaccessible Hall controls. Regression coverage was added for database migration and failure handling, backup recovery, record integrity, seating synchronization, CRUD editing, Dashboard states, accessibility, responsive reflow, PWA assets, and representative Hall Designer load.
 
-Final checks pass from a clean `npm ci`: formatting, lint, TypeScript, 44 unit tests, 16 applicable Playwright tests, the production build, and the npm vulnerability audit. Twelve Playwright cases are intentionally skipped in the mobile project because equivalent mobile-specific coverage exists or the workflow is desktop-only. The production shell was also loaded online, placed under service-worker control, and reloaded offline in Chromium.
+Final checks pass from a clean `npm ci`: formatting, lint, TypeScript, 48 unit tests, 18 applicable Playwright tests, the production build, and the npm vulnerability audit. Fourteen Playwright cases are intentionally skipped in the mobile project because equivalent mobile-specific coverage exists or the workflow is desktop-only. The production shell was also loaded online, placed under service-worker control, and reloaded offline in Chromium.
 
-No confirmed defects remain. Cross-browser execution outside Chromium, real mobile hardware gestures/keyboards, browser-driven install prompts, storage eviction, concurrent editing from multiple tabs, PDF/PNG Hall export (the implementation supports SVG and print), and GitHub's Linux runner were not available locally and remain unverified.
+No confirmed defects remain. Cross-browser execution outside Chromium, real mobile hardware gestures/keyboards, browser-driven install prompts, storage eviction, concurrent editing from multiple tabs, generated PDF Hall export (the implementation supports PNG and print-to-PDF), and GitHub's Linux runner were not available locally and remain unverified.
 
 ## Repository discovery
 
@@ -71,6 +71,19 @@ The inspected workflows were: first-run setup/sample loading; every section's cr
 | QA-021 | Low      | Performance/dependencies | Initial JS was 922.40 kB and three packages were unused.                                                                                                                                                         | A charting library served one simple chart, and Hall Designer loaded on every startup.                   | Replaced the chart with accessible native markup, removed unused packages, and lazy-loaded Hall Designer.                                                     | Production build: initial JS 354.50 kB gzip 104.97 kB; Hall chunk 233.28 kB gzip 72.40 kB. |
 | QA-022 | Low      | Responsive layout        | At 1024×768, Dashboard widened the document to 1088px. Resize a populated desktop page to 1024px and compare `documentElement.scrollWidth` with `innerWidth`.                                                    | The grid's `1fr` track honored a child's minimum-content width, and the main grid item could not shrink. | Changed the flexible track to `minmax(0, 1fr)` and gave main content `min-width: 0`.                                                                          | Light/dark reflow test passes at all nine required viewports.                              |
 
+## GitHub issue remediation
+
+| ID     | Severity | Issue                            | Resolution                                                                                                                                                                                                                                  | Verification                                                                          |
+| ------ | -------- | -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| QA-023 | High     | #1 Hall dark-mode contrast       | Replaced hard-coded Hall surfaces/borders with semantic theme tokens and separated dark-theme background and text accent colors.                                                                                                            | axe WCAG A/AA Hall scan passes in dark mode.                                          |
+| QA-024 | Medium   | #2 Overdue tasks under Coming up | Added a pure local-date partition and a visible Overdue list; Coming up now begins with today.                                                                                                                                              | Yesterday/today/tomorrow unit test and Dashboard E2E pass.                            |
+| QA-025 | High     | #3 Missing core edit workflows   | Added prefilled edit actions for tasks, expenses, guests, vendors, timeline items and notes while preserving IDs, `createdAt`, links and failure behavior.                                                                                  | Six-entity CRUD E2E passes and inspects persisted identity metadata.                  |
+| QA-026 | Medium   | #4 Empty seating success state   | Added a pure state derivation for no confirmed guests, no tables, incomplete allocation, conflicts and successful seating.                                                                                                                  | State-matrix unit test and empty Dashboard E2E pass.                                  |
+| QA-027 | Medium   | #5 Ambiguous Hall controls       | Added unique state-aware names for zoom, pan, layer locks/order and directional movement.                                                                                                                                                   | Accessibility-tree assertions, keyboard workflow and axe scan pass.                   |
+| QA-028 | High     | #6 Hall mobile composition       | Kept the canvas primary, removed editing panels at ≤600px, retained touch pan/pinch zoom and export, and documented the read-only limitation in the UI.                                                                                     | Touch and overflow E2E passes at 320, 360, 390, 412 and 600px.                        |
+| QA-029 | Medium   | #7 Incomplete PWA icons          | Added 192/512 PNGs, dedicated safe-zone maskable PNG/SVG, Apple touch icon, manifest metadata and resilient optional-icon caching.                                                                                                          | Unit asset/dimension test plus production URL, worker-control and offline tests pass. |
+| QA-030 | Medium   | #8 Oversized central components  | Reduced `App.tsx` from 3,276 to 664 lines by extracting planner screens/form primitives; extracted Hall toolbar, library and semantic panels while retaining the existing canvas, geometry, validation and export modules and lazy loading. | Full unit/E2E suite passes; chunking remains 358.47 kB initial plus 234.23 kB Hall.   |
+
 ## Security and privacy findings
 
 - No `dangerouslySetInnerHTML`, embedded secrets, analytics, trackers, or automatic network transfer of wedding records were found.
@@ -90,7 +103,7 @@ Automated rules and Chromium keyboard checks do not replace a full screen-reader
 
 ## Performance and large-data findings
 
-The production code split removed Vite's large-chunk warning: initial JS is 354.50 kB (104.97 kB gzip), and Hall Designer loads as a separate 233.28 kB chunk (72.40 kB gzip). Unit performance coverage validates 100 Hall objects, 50 flows and 1,000 guests in under one second in the test environment, plus non-overlapping placement of 100 tables. Undo history is bounded and pointer movement commits once at interaction end.
+The production code split removed Vite's large-chunk warning: initial JS is 358.47 kB (105.51 kB gzip), and Hall Designer loads as a separate 234.23 kB chunk (72.89 kB gzip). Unit performance coverage validates 100 Hall objects, 50 flows and 1,000 guests in under one second in the test environment, plus non-overlapping placement of 100 tables. Undo history is bounded and pointer movement commits once at interaction end.
 
 The requested 500-task and 500-expense browser datasets were inspected through the aggregation implementation but were not separately benchmarked in a browser profile. No material synchronous bottleneck was reproduced there.
 
@@ -102,13 +115,13 @@ The requested 500-task and 500-expense browser datasets were inspected through t
 | `npm run format:check`   | Passed                                                                 |
 | `npm run lint`           | Passed                                                                 |
 | `npm run typecheck`      | Passed                                                                 |
-| `npm test`               | 44 passed in 3 files                                                   |
-| `npm run test:e2e`       | 16 passed, 12 intentional project skips                                |
+| `npm test`               | 48 passed in 4 files                                                   |
+| `npm run test:e2e`       | 18 passed, 14 intentional project skips                                |
 | axe-core Playwright test | Passed with no violations in scanned states                            |
-| `npm run build`          | Passed; initial JS 354.50 kB, gzip 104.97 kB                           |
+| `npm run build`          | Passed; initial JS 358.47 kB, gzip 105.51 kB                           |
 | `npm audit --json`       | Passed; 0 total vulnerabilities                                        |
 | `git diff --check`       | Passed                                                                 |
-| Manifest/icon validation | Passed; standalone manifest and declared icon present                  |
+| Manifest/icon validation | Passed; standard, maskable, scalable and Apple icons present           |
 | Production PWA           | Service-worker controller present; shell rendered after offline reload |
 
 The browser console was observed during the production online/offline workflow and no application errors were emitted.
