@@ -909,6 +909,13 @@ export function Guests({
     [editing, setEditing] = useState<Guest | null>(null),
     [query, setQuery] = useState(""),
     stats = guestStats(data.guests);
+  const partnerOne = data.wedding?.partnerOne || "Partner one";
+  const partnerTwo = data.wedding?.partnerTwo || "Partner two";
+  const groupLabels: Record<Guest["group"], string> = {
+    "partner-one": partnerOne,
+    "partner-two": partnerTwo,
+    mutual: `${partnerOne} & ${partnerTwo}`,
+  };
   const guests = data.guests.filter((g) =>
     [g.name, g.phone, g.email].some((v) =>
       v.toLowerCase().includes(query.toLowerCase()),
@@ -988,7 +995,7 @@ export function Guests({
                 <h3>{g.name}</h3>
                 <p>
                   {g.attendees} attendee{g.attendees === 1 ? "" : "s"} ·{" "}
-                  {g.group.replace("-", " ")}
+                  {groupLabels[g.group]}
                 </p>
                 <span className={`pill ${g.rsvp}`}>{g.rsvp}</span>
                 <span className="pill">invite {g.invitation}</span>
@@ -1054,11 +1061,13 @@ export function Guests({
             />
             <div className="form-grid">
               <label>
-                Group
+                Guest of
                 <select name="group" defaultValue={editing?.group}>
-                  <option value="partner-one">Partner one</option>
-                  <option value="partner-two">Partner two</option>
-                  <option value="mutual">Mutual</option>
+                  <option value="partner-one">{partnerOne}</option>
+                  <option value="partner-two">{partnerTwo}</option>
+                  <option value="mutual">
+                    {partnerOne} &amp; {partnerTwo}
+                  </option>
                 </select>
               </label>
               <Field
