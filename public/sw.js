@@ -1,4 +1,4 @@
-const CACHE = "vow-shell-v3";
+const CACHE = "vow-shell-v4";
 self.addEventListener("install", (event) =>
   event.waitUntil(
     (async () => {
@@ -18,9 +18,17 @@ self.addEventListener("install", (event) =>
         base.href,
         new URL("index.html", base).href,
         new URL("manifest.webmanifest", base).href,
-        new URL("icon.svg", base).href,
         ...assets,
       ]);
+      await Promise.allSettled(
+        [
+          "icon.svg",
+          "icon-192.png",
+          "icon-512.png",
+          "icon-maskable-512.png",
+          "apple-touch-icon.png",
+        ].map((asset) => cache.add(new URL(asset, base))),
+      );
       await self.skipWaiting();
     })(),
   ),

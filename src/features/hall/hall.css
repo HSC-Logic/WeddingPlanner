@@ -24,9 +24,9 @@
   font-size: 13px;
 }
 .hall-toolbar {
-  background: var(--surface, #fff);
+  background: var(--surface);
   padding: 12px;
-  border: 1px solid #ddd4c8;
+  border: 1px solid var(--line);
   border-radius: 12px;
   margin-bottom: 14px;
 }
@@ -39,10 +39,10 @@
 .hall-workspace {
   display: grid;
   grid-template-columns: 190px minmax(260px, 1fr) 220px;
-  border: 1px solid #ddd4c8;
+  border: 1px solid var(--line);
   border-radius: 14px;
   overflow: hidden;
-  background: var(--surface, #fff);
+  background: var(--surface);
 }
 .hall-library,
 .hall-properties {
@@ -51,10 +51,10 @@
   overflow: auto;
 }
 .hall-library {
-  border-right: 1px solid #ddd4c8;
+  border-right: 1px solid var(--line);
 }
 .hall-properties {
-  border-left: 1px solid #ddd4c8;
+  border-left: 1px solid var(--line);
 }
 .hall-properties label,
 .hall-bottom section > label {
@@ -89,11 +89,11 @@
   font-size: 11px;
   min-height: 46px;
   padding: 6px;
-  border: 1px solid #ddd4c8;
+  border: 1px solid var(--line);
 }
 .hall-stage {
   min-width: 0;
-  background: #eeeae3;
+  background: var(--surface-2);
   overflow: hidden;
 }
 .hall-stage svg {
@@ -128,9 +128,9 @@
   justify-content: flex-start;
 }
 .hall-designer button[aria-pressed="true"] {
-  outline: 2px solid #497a91;
-  background: #e4eef0;
-  color: #21343a;
+  outline: 2px solid var(--accent);
+  background: var(--accent-soft);
+  color: var(--text);
 }
 .hall-layer {
   display: flex;
@@ -171,7 +171,7 @@
     grid-column: 1/-1;
     max-height: 400px;
     border-left: 0;
-    border-top: 1px solid #ddd4c8;
+    border-top: 1px solid var(--line);
     display: block;
   }
   .hall-properties fieldset {
