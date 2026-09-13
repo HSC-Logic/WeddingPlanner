@@ -897,26 +897,55 @@ tr:last-child td {
 .seating-table {
   background: var(--surface);
   border: 1px solid var(--line);
-  border-radius: 28px;
-  padding: 20px;
+  border-radius: 20px;
+  padding: 18px;
+  box-shadow: 0 8px 24px color-mix(in srgb, var(--text), transparent 94%);
 }
 .seating-table.rectangle {
-  border-radius: 13px;
+  border-radius: 16px;
 }
 .seating-table.custom {
-  border-radius: 28px 10px 28px 10px;
+  border-radius: 22px 12px 22px 12px;
 }
 .seating-table > header {
   display: flex;
   justify-content: space-between;
-  gap: 10px;
+  align-items: flex-start;
+  gap: 14px;
+  margin-bottom: 16px;
+}
+.seating-table-heading {
+  min-width: 0;
+}
+.seating-table-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.seating-table-actions {
+  display: flex;
+  gap: 6px;
+}
+.seating-table-actions .icon,
+.seating-table footer .icon {
+  width: 38px;
+  height: 38px;
+  min-height: 38px;
+  padding: 0;
+  border-radius: 10px;
+}
+.seating-table-actions svg,
+.seating-table footer svg {
+  width: 17px;
+  height: 17px;
 }
 .seating-table h3 {
-  margin: 9px 0 6px;
-  font-size: 22px;
+  margin: 10px 0 0;
+  font-size: 21px;
+  line-height: 1.2;
 }
 .seat-meter {
-  height: 8px;
+  height: 7px;
   border-radius: 99px;
   overflow: hidden;
   background: var(--surface-2);
@@ -926,11 +955,23 @@ tr:last-child td {
   height: 100%;
   background: var(--accent);
 }
-.seating-table > p {
-  margin: 9px 0 15px;
+.seating-table-stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin: 10px 0 16px;
+  color: var(--muted);
   font:
-    12px ui-sans-serif,
+    11px ui-sans-serif,
     sans-serif;
+}
+.seating-table-stats span {
+  display: grid;
+  gap: 2px;
+}
+.seating-table-stats strong {
+  color: var(--text);
+  font-size: 15px;
 }
 .seated-list {
   display: grid;
@@ -940,8 +981,10 @@ tr:last-child td {
   display: grid;
   grid-template-columns: 1fr auto auto;
   gap: 8px;
-  padding: 9px 10px;
-  border-radius: 9px;
+  align-items: center;
+  padding: 10px 12px;
+  border: 1px solid color-mix(in srgb, var(--line), transparent 35%);
+  border-radius: 11px;
   background: var(--surface-2);
   font:
     13px ui-sans-serif,
@@ -952,12 +995,11 @@ tr:last-child td {
 }
 .seating-table footer {
   display: flex;
+  justify-content: flex-end;
   gap: 6px;
-  margin-top: 14px;
-}
-.seating-table footer button {
-  min-height: 36px;
-  font-size: 11px;
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid color-mix(in srgb, var(--line), transparent 40%);
 }
 .unassigned-panel {
   background: var(--surface);
