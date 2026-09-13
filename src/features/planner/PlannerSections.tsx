@@ -405,7 +405,9 @@ export function Dashboard({ data }: { data: AppData }) {
             />
           )}
         </section>
-        <section className="panel dashboard-panel schedule-panel">
+        <section
+          className={`panel dashboard-panel schedule-panel${overdue.length ? "" : " single"}`}
+        >
           {overdue.length > 0 && (
             <section className="dashboard-section">
               <div className="panel-heading">
@@ -465,19 +467,19 @@ export function Dashboard({ data }: { data: AppData }) {
                 </span>
               </div>
             )}
-          </section>
-          {nextActivity && (
-            <div className="next">
-              <CalendarDays />
-              <div>
-                <small>Next activity</small>
-                <strong>{nextActivity.title}</strong>
-                <span>
-                  {displayDate(nextActivity.date)} at {nextActivity.startTime}
-                </span>
+            {nextActivity && (
+              <div className="next">
+                <CalendarDays />
+                <div>
+                  <small>Next activity</small>
+                  <strong>{nextActivity.title}</strong>
+                  <span>
+                    {displayDate(nextActivity.date)} at {nextActivity.startTime}
+                  </span>
+                </div>
               </div>
-            </div>
-          )}
+            )}
+          </section>
         </section>
       </div>
       <section className="panel seating-dashboard">
