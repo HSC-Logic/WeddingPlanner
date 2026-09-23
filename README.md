@@ -61,13 +61,14 @@ After first successful load, use browser **Install app** or **Add to Home Screen
 
 The manifest includes 192×192 and 512×512 PNG icons, a dedicated maskable 512×512 icon, the scalable SVG mark and an Apple touch icon. Installation metadata, service-worker control and offline reload are automated in Chromium; Safari/iOS and Android home-screen appearance still require real-device review.
 
-## GitHub Pages deployment
+## VPS deployment
 
 1. Push to `main`.
-2. In repository **Settings → Pages**, select **GitHub Actions** as source.
-3. Workflow validates lint, types, unit tests and build before deployment.
+2. Add the `VPS_DEPLOY_SSH_KEY` secret and `VPS_DEPLOY_HOST` and `VPS_DEPLOY_USER` variables under repository **Settings → Secrets and variables → Actions**.
+3. Configure `/var/www/wedding-planner`, Caddy, and DNS using [`docs/vps-deployment.md`](docs/vps-deployment.md).
+4. The workflow validates formatting, lint, types, unit tests and build before uploading `dist/` over SSH/SCP.
 
-Vite uses relative asset paths, so repository subpaths and refreshes of this single-document navigation work without server rewrites.
+The production domain is `https://tiemyknot.hsclogic.link`. Vite uses relative asset paths, so the PWA manifest, service worker, icons, and refreshes of this single-document navigation work at the domain root.
 
 ## Version 1 limits
 
